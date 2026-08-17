@@ -14,12 +14,12 @@ onto an electron-density isosurface.
 | Manual steps | none — the whole pipeline is two commands |
 
 <p align="center">
-  <img src="examples/brombenzol/images/brombenzol_pi.png" width="32%" alt="pi face">
-  <img src="examples/brombenzol/images/brombenzol_sigma.png" width="32%" alt="sigma hole">
-  <img src="examples/brombenzol/images/brombenzol_edge.png" width="32%" alt="in-plane profile">
+  <img src="reference/brombenzol/images/brombenzol_pi.png" width="32%" alt="pi face">
+  <img src="reference/brombenzol/images/brombenzol_sigma.png" width="32%" alt="sigma hole">
+  <img src="reference/brombenzol/images/brombenzol_edge.png" width="32%" alt="in-plane profile">
 </p>
 <p align="center">
-  <img src="examples/brombenzol/images/brombenzol_colorbar.png" width="42%" alt="colour scale">
+  <img src="reference/brombenzol/images/brombenzol_colorbar.png" width="42%" alt="colour scale">
 </p>
 
 <p align="center"><em>Bromobenzene. Left: π face, negative (red) above the ring.
@@ -360,10 +360,11 @@ pymol -ckq render_esp.py -- --prefix molecule
 
 ## 8. Step 4 — Several molecules at once
 
-Put each molecule in its own folder under a common root:
+Put each molecule in its own folder under a common root — for your own data that
+is `sandbox/`, which git ignores:
 
 ```
-examples/
+sandbox/
 ├── bromobenzene/   td.xyz  tp.xyz  bromobenzene.mol
 ├── iodobenzene/    td.xyz  tp.xyz  iodobenzene.mol
 └── chlorobenzene/  td.xyz  tp.xyz  chlorobenzene.mol
@@ -373,8 +374,27 @@ Then:
 
 ```bash
 cd scripts
-python run_all.py --root ../examples --stride 2 --two-pass
+python run_all.py --root ../sandbox --stride 2 --two-pass
 ```
+
+Called **without arguments**, `run_all.py` runs on `reference/` instead. That is
+the smoke test: it exercises the whole pipeline on data that is known to work, so
+you can tell an installation problem from a data problem before touching your own
+files.
+
+```bash
+python run_all.py
+```
+
+It writes to `reference/*/images_check/` and `reference/summary_check.csv`, never
+to the committed `images/` — so you can compare your output against the reference
+side by side. Both are git-ignored. Your run should reproduce
+V<sub>S,min</sub> = −0.0188 and V<sub>S,max</sub> = +0.0312 a.u. and a colour
+range of ±0.035 a.u.
+
+The images will look coarser than the committed ones: the smoke test runs on the
+decimated 42³ demo grids, the reference images were rendered at 126³. The
+*numbers* are what has to match.
 
 This converts what needs converting, renders every molecule, and writes
 `summary.csv` with V<sub>S,min</sub> and V<sub>S,max</sub> for each — in a.u.,
@@ -421,7 +441,8 @@ esp_visualization/
 │   ├── render_esp.py             standard image set from cube files
 │   ├── run_all.py                batch driver + summary.csv
 │   └── esp.pml                   interactive PyMOL scene
-├── examples/
+├── reference/                    known-good example — output, not input
+│   ├── summary.csv
 │   └── brombenzol/
 │       ├── brombenzol_aro_opti.mol
 │       ├── td_demo.cube          decimated (42³) so it fits in the repo
@@ -429,8 +450,16 @@ esp_visualization/
 │       ├── images/               reference images (rendered at 126³)
 │       └── brombenzol_settings.txt
 ├── docs/                         exported PDF of this SOP
-└── sandbox/                      scratch space, not tracked by git
+└── sandbox/                      your own data and experiments, not tracked
 ```
+
+**`reference/` and `sandbox/` do different jobs.** `reference/` holds a
+known-good example: the images this workflow is supposed to produce, the
+parameters that produced them, and a small decimated dataset to reproduce them
+with. It is committed, and you do not edit it. `sandbox/` is where your own
+molecules and the large raw data live; git ignores it entirely. If a run goes
+wrong, `reference/` tells you whether the problem is your installation or your
+data.
 
 **Large files are deliberately not tracked.** `.gitignore` excludes `*.cube`
 and the Turbomole `td.xyz`/`tp.xyz` grids — a full-resolution cube is 201 MB and
@@ -442,13 +471,13 @@ that a fresh clone can be tested immediately:
 
 ```bash
 cd scripts
-python render_esp.py --density ../examples/brombenzol/td_demo.cube \
-                     --esp ../examples/brombenzol/tp_demo.cube \
-                     --struct ../examples/brombenzol/brombenzol_aro_opti.mol \
+python render_esp.py --density ../reference/brombenzol/td_demo.cube \
+                     --esp ../reference/brombenzol/tp_demo.cube \
+                     --struct ../reference/brombenzol/brombenzol_aro_opti.mol \
                      --prefix demo --outdir /tmp/demo
 ```
 
-The images in `examples/brombenzol/images/` were rendered from the finer 126³
+The images in `reference/brombenzol/images/` were rendered from the finer 126³
 grid, so they are smoother than what the demo cubes produce. Both give the same
 ±0.035 a.u. colour range.
 

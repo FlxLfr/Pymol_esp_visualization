@@ -29,16 +29,16 @@ Typical use
 -----------
 First pass, every molecule on its own automatic colour scale::
 
-    python run_all.py --root ../examples --stride 2
+    python run_all.py --root ../reference --stride 2
 
 Second pass, one common scale so the images are directly comparable::
 
-    python run_all.py --root ../examples --stride 2 --esp-range 0.035
+    python run_all.py --root ../reference --stride 2 --esp-range 0.035
 
 Or let the script do both in one go -- it runs the automatic pass, takes the
 largest range it saw, and re-renders everything with it::
 
-    python run_all.py --root ../examples --stride 2 --two-pass
+    python run_all.py --root ../reference --stride 2 --two-pass
 
 ``--two-pass`` is the recommended way to produce a comparable figure set:
 you get the per-molecule maximum contrast images *and* the comparable ones,
@@ -67,6 +67,9 @@ HARTREE_TO_KJ = 2625.4996
 STRUCT_EXT = (".mol", ".sdf", ".pdb", ".xyz")
 GRID_NAMES = ("td", "tp")
 
+# reference/ liegt neben scripts/, nicht im aktuellen Arbeitsverzeichnis
+DEFAULT_ROOT = os.path.normpath(os.path.join(_HERE, "..", "reference"))
+
 
 # ----------------------------------------------------------------------------
 # Discovery
@@ -90,6 +93,22 @@ def find_structure(folder, exclude):
     return None
 
 
+def find_cubes(folder, filenames):
+    """Existing cube files in ``folder``, or None if not both are present.
+
+    Accepts the decimated ``td_demo.cube`` / ``tp_demo.cube`` of the reference
+    dataset as well, so that ``python run_all.py`` works as a smoke test on a
+    fresh clone.
+    """
+    cubes = {}
+    for tag in GRID_NAMES:
+        for candidate in (f"{tag}.cube", f"{tag}_demo.cube"):
+            if candidate in filenames:
+                cubes[tag] = os.path.join(folder, candidate)
+                break
+    return cubes if len(cubes) == len(GRID_NAMES) else None
+
+
 def discover(root):
     """All molecule folders below ``root``, sorted by name."""
     found = []
@@ -98,8 +117,8 @@ def discover(root):
                        if d not in ("images", "__pycache__", ".git")]
         names = set(filenames)
         has_raw = {"td.xyz", "tp.xyz"} <= names
-        has_cube = {"td.cube", "tp.cube"} <= names
-        if not (has_raw or has_cube):
+        cubes = find_cubes(dirpath, names)
+        if not (has_raw or cubes):
             continue
         struct = find_structure(
             dirpath, exclude=[os.path.join(dirpath, "td.xyz"),
@@ -109,7 +128,7 @@ def discover(root):
                   f"({'/'.join(STRUCT_EXT)}) - skipped")
             continue
         found.append({"dir": dirpath, "struct": struct,
-                      "has_raw": has_raw, "has_cube": has_cube})
+                      "has_raw": has_raw, "cubes": cubes})
     return sorted(found, key=lambda e: e["dir"])
 
 
@@ -120,16 +139,19 @@ def discover(root):
 def convert(entry, stride, struct_unit, force=False):
     """Turbomole grids -> cube, unless the cube files already exist."""
     folder = entry["dir"]
+    existing = entry.get("cubes") or {}
     out = {}
     for tag in GRID_NAMES:
         raw = os.path.join(folder, f"{tag}.xyz")
-        cube = os.path.join(folder, f"{tag}.cube")
+        cube = existing.get(tag) or os.path.join(folder, f"{tag}.cube")
         out[tag] = cube
-        if os.path.exists(cube) and not force:
-            print(f"    {tag}.cube exists, skipping conversion")
+        if tag in existing and not force:
+            print(f"    {os.path.basename(cube)} exists, skipping conversion")
             continue
         if not os.path.exists(raw):
             raise SystemExit(f"{folder}: neither {tag}.cube nor {tag}.xyz")
+        cube = os.path.join(folder, f"{tag}.cube")   # Neukonvertierung immer ohne _demo
+        out[tag] = cube
         print(f"    converting {tag}.xyz -> {tag}.cube (stride {stride})")
         atoms = xyzToCube.read_structure(entry["struct"], unit=struct_unit)
         info, data = xyzToCube.read_values(raw, verbose=False)
@@ -139,14 +161,14 @@ def convert(entry, stride, struct_unit, force=False):
 
 
 def render(entry, cubes, esp_range, iso, transparency, backgrounds,
-           width, height, dpi, buffer, prefix=None):
+           width, height, dpi, buffer, prefix=None, images_dir="images"):
     folder = entry["dir"]
     args = types.SimpleNamespace(
         density=cubes["td"],
         esp=cubes["tp"],
         struct=entry["struct"],
         prefix=prefix or os.path.basename(os.path.normpath(folder)),
-        outdir=os.path.join(folder, "images"),
+        outdir=os.path.join(folder, images_dir),
         iso=iso,
         esp_range=esp_range,
         transparency=transparency,
@@ -196,8 +218,11 @@ def write_summary(path, rows, common_range=None):
 def main(argv=None):
     p = argparse.ArgumentParser(
         description="Batch conversion and rendering of molecular ESP data.")
-    p.add_argument("--root", default="examples",
-                   help="directory tree to search for molecule folders")
+    # Ohne --root wird der reference/-Ordner des Repositoriums benutzt, egal aus
+    # welchem Verzeichnis das Skript aufgerufen wird. Das ist der Selbsttest.
+    p.add_argument("--root", default=DEFAULT_ROOT,
+                   help="directory tree to search for molecule folders "
+                        "(default: the repository's reference/ folder)")
     p.add_argument("--stride", type=int, default=2,
                    help="grid decimation during conversion (default 2)")
     p.add_argument("--struct-unit", choices=["angstrom", "bohr"],
@@ -216,13 +241,28 @@ def main(argv=None):
     p.add_argument("--height", type=int, default=1600)
     p.add_argument("--dpi", type=int, default=300)
     p.add_argument("--buffer", type=float, default=2.4)
+    p.add_argument("--images-dir", default=None,
+                   help="name of the output folder inside each molecule "
+                        "folder (default: 'images', or 'images_check' when "
+                        "running the built-in reference set)")
     p.add_argument("--summary", default=None,
                    help="path of the CSV summary (default <root>/summary.csv)")
     args = p.parse_args(argv)
 
+    is_reference = os.path.abspath(args.root) == os.path.abspath(DEFAULT_ROOT)
+    if args.images_dir is None:
+        # Der Selbsttest darf die committeten Referenzbilder nicht ueberschreiben.
+        args.images_dir = "images_check" if is_reference else "images"
+
     print("=" * 70)
     print("run_all.py - batch ESP visualisation")
     print("=" * 70)
+    if is_reference:
+        print("  Reference dataset (smoke test).")
+        print(f"  Writing to '{args.images_dir}/' so that the committed "
+              f"reference images stay untouched.")
+        print("  Compare your output with reference/*/images/ - the colour "
+              "scale and V_S values must match.")
 
     entries = discover(args.root)
     if not entries:
@@ -237,7 +277,7 @@ def main(argv=None):
         cubes = convert(e, args.stride, args.struct_unit, args.force_convert)
         res = render(e, cubes, args.esp_range, args.iso, args.transparency,
                      args.backgrounds, args.width, args.height, args.dpi,
-                     args.buffer)
+                     args.buffer, images_dir=args.images_dir)
         rows.append(res)
 
     common = max(r["esp_range"] for r in rows)
@@ -248,16 +288,16 @@ def main(argv=None):
         rows = []
         for e in entries:
             print(f"\n[{os.path.basename(os.path.normpath(e['dir']))}]")
-            cubes = {t: os.path.join(e["dir"], f"{t}.cube")
-                     for t in GRID_NAMES}
+            cubes = convert(e, args.stride, args.struct_unit, force=False)
             res = render(e, cubes, common, args.iso, args.transparency,
                          args.backgrounds, args.width, args.height, args.dpi,
-                         args.buffer)
+                         args.buffer, images_dir=args.images_dir)
             rows.append(res)
     elif args.two_pass and len(rows) <= 1:
         print("\n(--two-pass skipped: a single molecule needs no common scale)")
 
-    summary = args.summary or os.path.join(args.root, "summary.csv")
+    summary = args.summary or os.path.join(
+        args.root, "summary_check.csv" if is_reference else "summary.csv")
     write_summary(summary, rows, common_range=common)
 
     print("\n" + "-" * 70)
