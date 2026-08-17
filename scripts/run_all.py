@@ -186,6 +186,9 @@ def write_summary(path, rows, common_range=None):
     fields = ["molecule", "structure", "grid", "iso_au",
               "shell_points", "VS_min_au", "VS_max_au",
               "VS_min_kcal", "VS_max_kcal", "VS_min_kJ", "VS_max_kJ",
+              "VS_max_on", "VS_min_on",
+              "halogen", "sigma_hole_au", "sigma_hole_kcal",
+              "belt_min_au", "belt_min_kcal",
               "esp_range_used_au", "esp_range_mode"]
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=fields)
@@ -203,6 +206,17 @@ def write_summary(path, rows, common_range=None):
                 "VS_max_kcal": f"{r['vmax'] * HARTREE_TO_KCAL:.2f}",
                 "VS_min_kJ": f"{r['vmin'] * HARTREE_TO_KJ:.1f}",
                 "VS_max_kJ": f"{r['vmax'] * HARTREE_TO_KJ:.1f}",
+                "VS_max_on": r.get("vmax_atom") or "",
+                "VS_min_on": r.get("vmin_atom") or "",
+                "halogen": r.get("halogen") or "",
+                "sigma_hole_au": ("" if r.get("sigma_max") is None
+                                  else f"{r['sigma_max']:.5f}"),
+                "sigma_hole_kcal": ("" if r.get("sigma_max") is None
+                                    else f"{r['sigma_max']*HARTREE_TO_KCAL:.2f}"),
+                "belt_min_au": ("" if r.get("belt_min") is None
+                                else f"{r['belt_min']:.5f}"),
+                "belt_min_kcal": ("" if r.get("belt_min") is None
+                                  else f"{r['belt_min']*HARTREE_TO_KCAL:.2f}"),
                 "esp_range_used_au": f"{r['esp_range']:.4f}",
                 "esp_range_mode": r["esp_range_mode"],
             })
@@ -301,12 +315,14 @@ def main(argv=None):
     write_summary(summary, rows, common_range=common)
 
     print("\n" + "-" * 70)
-    print(f"{'molecule':<24}{'V_S,min':>12}{'V_S,max':>12}"
-          f"{'range used':>14}")
+    print(f"{'molecule':<20}{'V_S,min':>10}{'V_S,max':>10}{'(on)':>7}"
+          f"{'sigma-hole':>12}{'range':>9}")
     print("-" * 70)
     for r in rows:
-        print(f"{r['prefix']:<24}{r['vmin']:>+12.4f}{r['vmax']:>+12.4f}"
-              f"{r['esp_range']:>14.4f}")
+        sig = ("     -" if r.get("sigma_max") is None
+               else f"{r['sigma_max']:+12.4f}")
+        print(f"{r['prefix']:<20}{r['vmin']:>+10.4f}{r['vmax']:>+10.4f}"
+              f"{(r.get('vmax_atom') or '?'):>7}{sig}{r['esp_range']:>9.4f}")
     print("-" * 70)
     print(f"Common scale covering all molecules: +/- {common:.4f} a.u.")
     print(f"Summary written to {summary}")

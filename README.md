@@ -331,9 +331,45 @@ rotation is needed or wanted.
 Alongside the images:
 
 * `*_colorbar.png` — the colour scale as a separate figure (needs matplotlib)
-* `*_settings.txt` — every parameter used, including V<sub>S,min</sub> and
-  V<sub>S,max</sub>. Keep this next to the figures; it is the record of how they
-  were made.
+* `*_settings.txt` — every parameter used, including the surface ESP values.
+  Keep this next to the figures; it is the record of how they were made.
+
+### Which number describes the σ-hole
+
+**Not `V_S,max`.** On an aryl halide the global maximum of the surface potential
+sits on the *ring hydrogens*, not on the halogen. Compare bromobenzene and
+iodobenzene:
+
+| | bromobenzene | iodobenzene |
+|---|---|---|
+| **σ-hole** (cap on the C–X axis) | **+0.0126** a.u. (+7.9 kcal/mol) | **+0.0246** a.u. (+15.5 kcal/mol) |
+| ring hydrogens = global V<sub>S,max</sub> | +0.0312 a.u. (+19.6) | +0.0311 a.u. (+19.5) |
+| halogen belt = global V<sub>S,min</sub> | −0.0188 a.u. (−11.8) | −0.0167 a.u. (−10.5) |
+
+The two global maxima are identical to three decimals — because both are the same
+aromatic C–H. Use them to compare halogen-bond donors and you conclude that
+bromine and iodine have equally strong σ-holes, which is wrong: the σ-holes
+differ by nearly a factor of two, in the expected direction.
+
+`render_esp.py` therefore reports both. It names the atom the global extremum
+belongs to, and gives the local values in the halogen regions:
+
+```
+    V_S,max = +0.0312 a.u.  =  +19.6 kcal/(mol*e)   auf H5
+  Lokal am Halogen (Br):
+    sigma-Loch  = +0.0126 a.u.  =   +7.9 kcal/(mol*e)   [144 Punkte]
+    Guertel     = -0.0188 a.u.  =  -11.8 kcal/(mol*e)   [836 Punkte]
+    ! V_S,max liegt auf H5, nicht auf dem Halogen
+```
+
+Both values also go into `*_settings.txt` and into the `sigma_hole_au` /
+`belt_min_au` columns of `summary.csv`.
+
+The σ-hole cap is a small patch of the surface, so it needs enough grid points.
+If fewer than 30 land inside it the script says so and the value is too low — on
+the decimated 42³ demo grid the same bromobenzene σ-hole comes out as +0.0034
+instead of +0.0126. `--stride 2` (126³) is fine; do not read a σ-hole off a
+coarser grid.
 
 Options worth knowing:
 

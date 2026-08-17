@@ -105,6 +105,86 @@ def esp_statistics(density, esp, iso=0.001, tol_factor=0.12):
     return float(shell.min()), float(shell.max()), int(mask.sum())
 
 
+def shell_points(density, esp, origin, voxel, iso=0.001, tol_factor=0.12):
+    """Koordinaten und ESP-Werte der Gitterpunkte auf der rho=iso-Schale.
+
+    Nur die Schalenpunkte werden materialisiert, nicht das ganze Gitter -
+    bei 251^3 waere ein volles Koordinatenfeld sonst mehrere hundert MB.
+    """
+    mask = np.abs(density - iso) < iso * tol_factor
+    if mask.sum() < 50:
+        mask = np.abs(density - iso) < iso * 0.30
+    idx = np.argwhere(mask)                       # (N, 3) Gitterindizes
+    pos = origin + idx @ voxel                    # (N, 3) kartesisch, Bohr
+    return pos, esp[mask]
+
+
+def local_extrema(pos, vals, atoms,
+                  cone_cos=0.80, belt_cos=0.35, belt_factor=1.5):
+    """Regionsaufgeloeste Oberflaechen-Extrema.
+
+    Warum das noetig ist: das *globale* V_S,max einer Aryl-Halogenid-Oberflaeche
+    sitzt fast immer auf den Ring-Wasserstoffen, nicht auf dem Halogen. Bei
+    Brombenzol und Iodbenzol liefert der globale Wert deshalb zweimal dasselbe
+    C-H (+0.031 a.u.), waehrend sich die sigma-Loecher, um die es eigentlich
+    geht, um fast den Faktor zwei unterscheiden. Fuer jeden Vergleich von
+    Halogenbruecken-Donoren braucht man das *lokale* Maximum auf dem Halogen.
+
+    Regionen:
+      sigma   Kappe um die verlaengerte C-X-Achse (Oeffnungswinkel aus cone_cos)
+      belt    Guertel senkrecht dazu, in Halogennaehe
+      hydro   Umgebung der Wasserstoffatome
+
+    Rueckgabe: dict mit den Kennwerten in atomaren Einheiten; die
+    halogenbezogenen Eintraege fehlen, wenn das Molekuel kein Halogen enthaelt.
+    """
+    out = {}
+    coords = np.array([[a[1], a[2], a[3]] for a in atoms])
+    znums = np.array([a[0] for a in atoms])
+
+    # --- Region des globalen Extremums benennen ------------------------
+    for tag, i in (("vmax", int(np.argmax(vals))), ("vmin", int(np.argmin(vals)))):
+        d = np.linalg.norm(coords - pos[i], axis=1)
+        j = int(np.argmin(d))
+        out[f"{tag}_atom"] = f"{z_symbol(int(znums[j]))}{j + 1}"
+
+    # --- Halogenregionen ------------------------------------------------
+    hal = [i for i, z in enumerate(znums) if z in HALOGENS]
+    if not hal:
+        return out
+
+    hi = hal[0]
+    carbons = [i for i, z in enumerate(znums) if z == 6]
+    if not carbons:
+        return out
+    ci = carbons[int(np.argmin(np.linalg.norm(coords[carbons] - coords[hi],
+                                              axis=1)))]
+    axis = coords[hi] - coords[ci]
+    axis = axis / np.linalg.norm(axis)             # C -> X, zeigt zum sigma-Loch
+
+    rel = pos - coords[hi]
+    r = np.linalg.norm(rel, axis=1)
+    r[r == 0] = 1e-9
+    cos = (rel @ axis) / r
+
+    cap = cos > cone_cos
+    if cap.sum() >= 5:
+        out["sigma_max"] = float(vals[cap].max())
+        out["sigma_points"] = int(cap.sum())
+        # Die sigma-Kappe ist ein kleiner Ausschnitt der Oberflaeche. Auf einem
+        # groben Gitter liegen dort nur wenige Punkte, und das lokale Maximum
+        # wird dann systematisch unterschaetzt.
+        out["sigma_sparse"] = bool(cap.sum() < 30)
+        r_cap = float(r[cap].mean())
+        belt = (np.abs(cos) < belt_cos) & (r < belt_factor * r_cap)
+        if belt.sum() >= 5:
+            out["belt_min"] = float(vals[belt].min())
+            out["belt_points"] = int(belt.sum())
+
+    out["halogen"] = HALOGENS[int(znums[hi])]
+    return out
+
+
 def nice_range(vmin, vmax, step=0.005):
     """Symmetrischer, auf ``step`` aufgerundeter Bereich."""
     amp = max(abs(vmin), abs(vmax))
@@ -117,6 +197,15 @@ def nice_range(vmin, vmax, step=0.005):
 
 HALOGENS = {9: "F", 17: "Cl", 35: "Br", 53: "I"}
 BOHR_PER_ANGSTROM = 1.8897259886
+
+Z_SYMBOL = {1: "H", 5: "B", 6: "C", 7: "N", 8: "O", 9: "F", 11: "Na",
+            12: "Mg", 14: "Si", 15: "P", 16: "S", 17: "Cl", 19: "K",
+            20: "Ca", 26: "Fe", 29: "Cu", 30: "Zn", 34: "Se", 35: "Br",
+            53: "I"}
+
+
+def z_symbol(z):
+    return Z_SYMBOL.get(int(z), f"Z{int(z)}")
 
 
 def molecular_frame(atoms):
@@ -234,11 +323,35 @@ def render_all(args):
         rng = float(args.esp_range)
         how = "fest vorgegeben"
 
+    # Regionsaufgeloeste Kennwerte: das globale Maximum sitzt bei Arylhalogeniden
+    # auf den Ring-Wasserstoffen, nicht auf dem Halogen.
+    pos, vals = shell_points(dens, esp, origin, voxel, iso=args.iso)
+    loc = local_extrema(pos, vals, atoms)
+
+    def _fmt(v):
+        return (f"{v:+.4f} a.u.  = {v*2625.4996:+7.1f} kJ/(mol*e)"
+                f"  = {v*627.5095:+6.1f} kcal/(mol*e)")
+
     print(f"  ESP auf der rho={args.iso}-Schale ({npts} Punkte):")
-    print(f"    V_S,min = {vmin:+.4f} a.u.  = {vmin*2625.4996:+7.1f} kJ/(mol*e)"
-          f"  = {vmin*627.5095:+6.1f} kcal/(mol*e)")
-    print(f"    V_S,max = {vmax:+.4f} a.u.  = {vmax*2625.4996:+7.1f} kJ/(mol*e)"
-          f"  = {vmax*627.5095:+6.1f} kcal/(mol*e)")
+    print(f"    V_S,min = {_fmt(vmin)}   auf {loc.get('vmin_atom', '?')}")
+    print(f"    V_S,max = {_fmt(vmax)}   auf {loc.get('vmax_atom', '?')}")
+    if "sigma_max" in loc:
+        print(f"  Lokal am Halogen ({loc.get('halogen', '?')}):")
+        print(f"    sigma-Loch  = {_fmt(loc['sigma_max'])}"
+              f"   [{loc['sigma_points']} Punkte]")
+        if loc.get("sigma_sparse"):
+            print(f"    ! nur {loc['sigma_points']} Gitterpunkte in der "
+                  f"sigma-Kappe - der Wert ist auf diesem groben Gitter")
+            print(f"      unzuverlaessig und zu niedrig. Feiner rechnen "
+                  f"(kleineres --stride).")
+        if "belt_min" in loc:
+            print(f"    Guertel     = {_fmt(loc['belt_min'])}"
+                  f"   [{loc['belt_points']} Punkte]")
+        if loc.get("vmax_atom", "").rstrip("0123456789") not in (
+                loc.get("halogen"), ""):
+            print(f"    ! V_S,max liegt auf {loc['vmax_atom']}, nicht auf dem "
+                  f"Halogen - fuer den Vergleich von sigma-Loechern")
+            print(f"      den Wert 'sigma-Loch' verwenden, nicht V_S,max.")
     print(f"  Farbskala: +/- {rng:.3f} a.u. ({how})")
     if args.esp_range == "auto":
         print("  ! Fuer den Vergleich mehrerer Molekuele diesen Wert fixieren:")
@@ -334,9 +447,20 @@ def render_all(args):
                  f"x {dens.shape[2]}\n")
         fh.write(f"Isowert rho       : {args.iso} a.u.\n")
         fh.write(f"V_S,min           : {vmin:+.5f} a.u. "
-                 f"({vmin*627.5095:+.2f} kcal/(mol*e))\n")
+                 f"({vmin*627.5095:+.2f} kcal/(mol*e))  auf "
+                 f"{loc.get('vmin_atom','?')}\n")
         fh.write(f"V_S,max           : {vmax:+.5f} a.u. "
-                 f"({vmax*627.5095:+.2f} kcal/(mol*e))\n")
+                 f"({vmax*627.5095:+.2f} kcal/(mol*e))  auf "
+                 f"{loc.get('vmax_atom','?')}\n")
+        if "sigma_max" in loc:
+            warn = "  ! zu wenige Gitterpunkte" if loc.get("sigma_sparse") else ""
+            fh.write(f"sigma-Loch ({loc.get('halogen','?'):<2})   : "
+                     f"{loc['sigma_max']:+.5f} a.u. "
+                     f"({loc['sigma_max']*627.5095:+.2f} kcal/(mol*e))"
+                     f"  [{loc['sigma_points']} Punkte]{warn}\n")
+        if "belt_min" in loc:
+            fh.write(f"Halogenguertel    : {loc['belt_min']:+.5f} a.u. "
+                     f"({loc['belt_min']*627.5095:+.2f} kcal/(mol*e))\n")
         fh.write(f"Farbskala         : -{rng:.4f} .. +{rng:.4f} a.u. ({how})\n")
         fh.write(f"Transparenz       : {args.transparency}\n")
         fh.write(f"Hintergrund       : {', '.join(args.backgrounds)}\n")
@@ -356,6 +480,13 @@ def render_all(args):
         "shell_points": npts,
         "esp_range": rng,
         "esp_range_mode": "auto" if args.esp_range == "auto" else "fixed",
+        "vmin_atom": loc.get("vmin_atom"),
+        "vmax_atom": loc.get("vmax_atom"),
+        "halogen": loc.get("halogen"),
+        "sigma_max": loc.get("sigma_max"),
+        "sigma_points": loc.get("sigma_points"),
+        "sigma_sparse": loc.get("sigma_sparse"),
+        "belt_min": loc.get("belt_min"),
         "files": written,
         "settings_file": settings,
     }
