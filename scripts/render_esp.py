@@ -1,0 +1,478 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+render_esp.py
+=============
+
+Erzeugt einen standardisierten Satz ESP-Bilder aus einem Paar Cube-Dateien
+(Elektronendichte + elektrostatisches Potential), vollautomatisch und ohne
+einen einzigen Mausklick.
+
+Das ESP wird auf die Isoflaeche der Elektronendichte bei rho = 0.001 a.u.
+abgebildet (Konvention nach Politzer/Murray) und aus drei fest definierten
+Blickrichtungen gerendert:
+
+    pi      senkrecht auf die Molekuelebene   -> zeigt das pi-System
+    edge    in der Molekuelebene              -> Profil, C-X-Achse waagerecht
+    sigma   entlang der C-X-Achse von aussen  -> zeigt das sigma-Loch frontal
+
+Die Orientierung wird aus der Geometrie berechnet (Traegheitsachsen +
+Kohlenstoff-Halogen-Achse), NICHT ueber PyMOLs ``orient``. Dadurch liefern
+verschiedene Molekuele reproduzierbar dieselbe Ausrichtung.
+
+
+Aufruf
+------
+    pymol -cq render_esp.py -- --density td.cube --esp tp.cube \\
+                               --struct brombenzol_aro_opti.mol \\
+                               --prefix brombenzol
+
+Ohne Argumente sucht das Skript im aktuellen Ordner nach ``td.cube``,
+``tp.cube`` und einer Struktur (.mol/.sdf/.pdb/.xyz).
+
+
+Farbskala
+---------
+Standardmaessig wird der ESP-Bereich aus den Daten *auf der Isoflaeche*
+bestimmt und symmetrisch auf einen glatten Wert aufgerundet. Der verwendete
+Wert wird ins Log und in die Datei ``<prefix>_settings.txt`` geschrieben.
+
+!! Fuer den direkten Vergleich mehrerer Molekuele muss die Skala fest sein.
+   Dazu einmal alle Molekuele mit --esp-range auto durchlaufen lassen, den
+   groessten gemeldeten Wert notieren und danach alle erneut mit
+   --esp-range <wert> rendern.
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import math
+import os
+import sys
+
+import numpy as np
+
+
+# ----------------------------------------------------------------------------
+# Cube einlesen (nur fuer die Statistik; PyMOL laedt die Dateien selbst)
+# ----------------------------------------------------------------------------
+
+def read_cube(path):
+    """Liest ein Gaussian-Cube. Rueckgabe: (werte3d, atome, origin, voxel)."""
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        fh.readline()
+        fh.readline()
+        parts = fh.readline().split()
+        natoms = int(parts[0])
+        origin = np.array([float(v) for v in parts[1:4]])
+
+        n = []
+        voxel = []
+        for _ in range(3):
+            p = fh.readline().split()
+            n.append(int(p[0]))
+            voxel.append([float(v) for v in p[1:4]])
+        n = np.array(n)
+        voxel = np.array(voxel)
+
+        atoms = []
+        for _ in range(natoms):
+            p = fh.readline().split()
+            atoms.append((int(p[0]),
+                          float(p[2]), float(p[3]), float(p[4])))
+
+        values = np.fromstring(fh.read(), sep=" ", dtype=np.float64)
+
+    if values.size != int(np.prod(n)):
+        raise ValueError(f"{path}: erwartet {int(np.prod(n))} Werte, "
+                         f"gelesen {values.size}")
+    return values.reshape(n), atoms, origin, voxel
+
+
+def esp_statistics(density, esp, iso=0.001, tol_factor=0.12):
+    """ESP-Kennzahlen auf der rho=iso-Schale.
+
+    Liefert (V_min, V_max, anzahl_punkte) in atomaren Einheiten.
+    ``tol_factor`` legt die Schalendicke relativ zum Isowert fest.
+    """
+    mask = np.abs(density - iso) < iso * tol_factor
+    if mask.sum() < 50:                        # Schale zu duenn -> aufweiten
+        mask = np.abs(density - iso) < iso * 0.30
+    if mask.sum() == 0:
+        return None, None, 0
+    shell = esp[mask]
+    return float(shell.min()), float(shell.max()), int(mask.sum())
+
+
+def nice_range(vmin, vmax, step=0.005):
+    """Symmetrischer, auf ``step`` aufgerundeter Bereich."""
+    amp = max(abs(vmin), abs(vmax))
+    return math.ceil(amp / step) * step
+
+
+# ----------------------------------------------------------------------------
+# Orientierung aus der Geometrie
+# ----------------------------------------------------------------------------
+
+HALOGENS = {9: "F", 17: "Cl", 35: "Br", 53: "I"}
+BOHR_PER_ANGSTROM = 1.8897259886
+
+
+def molecular_frame(atoms):
+    """Bestimmt ein reproduzierbares Molekuelkoordinatensystem.
+
+    Rueckgabe: (normal, axis, center)
+      normal  Flaechennormale (kleinste Traegheitsausdehnung, nur Schweratome)
+      axis    C->Halogen-Achse; falls kein Halogen: laengste Hauptachse
+      center  geometrischer Mittelpunkt aller Atome
+    Alle Vektoren normiert, Koordinaten in denselben Einheiten wie ``atoms``.
+    """
+    coords = np.array([[a[1], a[2], a[3]] for a in atoms])
+    znums = np.array([a[0] for a in atoms])
+    center = coords.mean(axis=0)
+
+    heavy = coords[znums > 1]
+    if len(heavy) < 3:
+        heavy = coords
+    centered = heavy - heavy.mean(axis=0)
+
+    # Hauptachsen ueber Singulaerwertzerlegung
+    _, sing, vt = np.linalg.svd(centered, full_matrices=False)
+    normal = vt[2]                                   # kleinste Ausdehnung
+    long_axis = vt[0]                                # groesste Ausdehnung
+
+    # C-Halogen-Achse suchen
+    axis = None
+    hal_idx = [i for i, z in enumerate(znums) if z in HALOGENS]
+    if hal_idx:
+        hi = hal_idx[0]
+        carbons = [i for i, z in enumerate(znums) if z == 6]
+        if carbons:
+            d = np.linalg.norm(coords[carbons] - coords[hi], axis=1)
+            ci = carbons[int(np.argmin(d))]
+            axis = coords[hi] - coords[ci]           # C -> X, zeigt zum sigma-Loch
+
+    if axis is None:
+        axis = long_axis.copy()
+
+    axis = axis / np.linalg.norm(axis)
+    normal = normal / np.linalg.norm(normal)
+
+    # axis exakt senkrecht zur Normalen machen (numerisches Aufraeumen)
+    axis = axis - normal * float(np.dot(axis, normal))
+    if np.linalg.norm(axis) < 1e-6:
+        axis = long_axis
+    axis = axis / np.linalg.norm(axis)
+
+    return normal, axis, center
+
+
+def view_matrix(forward, up):
+    """Rotationsmatrix fuer PyMOLs set_view.
+
+    ``forward`` zeigt vom Molekuel zur Kamera, ``up`` nach oben im Bild.
+    Zeilen der Matrix sind die Kamera-Basisvektoren im Weltsystem.
+    """
+    z = np.asarray(forward, dtype=float)
+    z = z / np.linalg.norm(z)
+    up = np.asarray(up, dtype=float)
+    up = up - z * float(np.dot(up, z))
+    if np.linalg.norm(up) < 1e-8:                    # up parallel zu z
+        alt = np.array([0.0, 0.0, 1.0])
+        if abs(float(np.dot(alt, z))) > 0.9:
+            alt = np.array([1.0, 0.0, 0.0])
+        up = alt - z * float(np.dot(alt, z))
+    up = up / np.linalg.norm(up)
+    right = np.cross(up, z)
+    right = right / np.linalg.norm(right)
+    # PyMOL erwartet in set_view die Matrix, deren SPALTEN die
+    # Kamera-Basisvektoren im Weltsystem sind - also die Transponierte
+    # der Zeilenform. Empirisch geprueft (siehe SOP, Abschnitt Ansichten).
+    return np.array([right, up, z]).T
+
+
+# ----------------------------------------------------------------------------
+# Rendering
+# ----------------------------------------------------------------------------
+
+def ensure_pymol():
+    """Liefert ``cmd``; startet PyMOL headless, falls noch nicht gestartet.
+
+    So laeuft das Skript sowohl mit ``python render_esp.py ...`` als auch mit
+    ``pymol -cq render_esp.py -- ...``.
+    """
+    import pymol
+    if not getattr(pymol, "_cmd", None) or not hasattr(pymol, "cmd"):
+        pymol.finish_launching(["pymol", "-qc"])
+    else:
+        try:
+            pymol.cmd.get_version()
+        except Exception:
+            pymol.finish_launching(["pymol", "-qc"])
+    return pymol.cmd
+
+
+def render_all(args):
+    cmd = ensure_pymol()
+
+    # --- Daten fuer die Statistik ---------------------------------------
+    dens, atoms, origin, voxel = read_cube(args.density)
+    esp, _, _, _ = read_cube(args.esp)
+    if dens.shape != esp.shape:
+        raise SystemExit("Dichte- und ESP-Cube haben unterschiedliche Gitter.")
+
+    vmin, vmax, npts = esp_statistics(dens, esp, iso=args.iso)
+    if npts == 0:
+        raise SystemExit(f"Keine Gitterpunkte bei rho = {args.iso} gefunden. "
+                         f"Isowert pruefen.")
+
+    if args.esp_range == "auto":
+        rng = nice_range(vmin, vmax)
+        how = "automatisch aus den Daten"
+    else:
+        rng = float(args.esp_range)
+        how = "fest vorgegeben"
+
+    print(f"  ESP auf der rho={args.iso}-Schale ({npts} Punkte):")
+    print(f"    V_S,min = {vmin:+.4f} a.u.  = {vmin*2625.4996:+7.1f} kJ/(mol*e)"
+          f"  = {vmin*627.5095:+6.1f} kcal/(mol*e)")
+    print(f"    V_S,max = {vmax:+.4f} a.u.  = {vmax*2625.4996:+7.1f} kJ/(mol*e)"
+          f"  = {vmax*627.5095:+6.1f} kcal/(mol*e)")
+    print(f"  Farbskala: +/- {rng:.3f} a.u. ({how})")
+    if args.esp_range == "auto":
+        print("  ! Fuer den Vergleich mehrerer Molekuele diesen Wert fixieren:")
+        print(f"      --esp-range {rng:.3f}")
+
+    # --- Orientierung ---------------------------------------------------
+    normal, axis, center = molecular_frame(atoms)     # in Bohr (Cube-Einheiten)
+    center_ang = center / BOHR_PER_ANGSTROM           # PyMOL rechnet in Angstrom
+
+    views = {
+        # Blick senkrecht auf die Ebene; C-X-Achse zeigt nach unten
+        "pi":    view_matrix(forward=normal, up=-axis),
+        # Blick in der Ebene, senkrecht zur C-X-Achse; C-X-Achse waagerecht
+        "edge":  view_matrix(forward=np.cross(normal, axis), up=normal),
+        # Blick von aussen entlang der C-X-Achse auf das sigma-Loch
+        "sigma": view_matrix(forward=axis, up=normal),
+    }
+    if args.views:
+        views = {k: v for k, v in views.items() if k in args.views}
+
+    # --- PyMOL-Szene ----------------------------------------------------
+    cmd.reinitialize()
+    cmd.set("auto_zoom", 0)
+
+    cmd.load(args.struct, "mol")
+    cmd.load(args.density, "dens")
+    cmd.load(args.esp, "esp")
+
+    cmd.hide("everything")
+    cmd.show("sticks", "mol")
+    cmd.set("stick_radius", 0.10)
+    cmd.color("grey20", "mol and elem C")
+    cmd.util.cnc("mol")
+
+    cmd.isosurface("surf", "dens", args.iso)
+    cmd.ramp_new("espramp", "esp", [-rng, 0.0, rng], ["red", "white", "blue"])
+    cmd.set("surface_color", "espramp", "surf")
+    cmd.disable("espramp")                 # Balken nicht ins Bild rendern
+
+    cmd.set("transparency", args.transparency)
+    cmd.set("transparency_mode", 2)
+    cmd.set("surface_quality", 1)
+    cmd.set("two_sided_lighting", 1)
+    cmd.set("specular", 0.2)
+    cmd.set("ambient", 0.15)
+    cmd.set("ray_opaque_background", 1)
+    cmd.set("antialias", 2)
+    cmd.set("orthoscopic", 1)              # keine Perspektive -> vergleichbar
+
+    outdir = args.outdir or "."
+    os.makedirs(outdir, exist_ok=True)
+    written = []
+
+    for bg in args.backgrounds:
+        cmd.bg_color(bg)
+        for name, R in views.items():
+            v = list(cmd.get_view())
+            v[0:9] = [float(x) for x in R.flatten()]
+            v[12:15] = [float(x) for x in center_ang]
+            cmd.set_view(v)
+            # Auf das Molekuel zoomen, NICHT auf "surf": das Isoflaechen-
+            # Objekt traegt die Ausdehnung der gesamten Gitterbox mit sich
+            # und wuerde das Motiv winzig erscheinen lassen.
+            cmd.zoom("mol", args.buffer)
+
+            suffix = f"_{bg}" if len(args.backgrounds) > 1 else ""
+            png = os.path.join(outdir, f"{args.prefix}_{name}{suffix}.png")
+            cmd.ray(args.width, args.height)
+            cmd.png(png, dpi=args.dpi)
+            written.append(png)
+            print(f"    -> {png}")
+
+    # --- Farbskala als eigenes Bild -------------------------------------
+    bar = None
+    try:
+        bar = colorbar(os.path.join(outdir, f"{args.prefix}_colorbar.png"),
+                       rng, dpi=args.dpi)
+        written.append(bar)
+        print(f"    -> {bar}")
+    except ImportError:
+        print("    (matplotlib fehlt - Farbskala wird uebersprungen; "
+              "'conda install matplotlib' zum Aktivieren)")
+
+    # --- Protokoll ------------------------------------------------------
+    settings = os.path.join(outdir, f"{args.prefix}_settings.txt")
+    with open(settings, "w", encoding="utf-8") as fh:
+        fh.write("Renderparameter (erzeugt von render_esp.py)\n")
+        fh.write("=" * 55 + "\n")
+        fh.write(f"Struktur          : {args.struct}\n")
+        fh.write(f"Dichte-Cube       : {args.density}\n")
+        fh.write(f"ESP-Cube          : {args.esp}\n")
+        fh.write(f"Gitter            : {dens.shape[0]} x {dens.shape[1]} "
+                 f"x {dens.shape[2]}\n")
+        fh.write(f"Isowert rho       : {args.iso} a.u.\n")
+        fh.write(f"V_S,min           : {vmin:+.5f} a.u. "
+                 f"({vmin*627.5095:+.2f} kcal/(mol*e))\n")
+        fh.write(f"V_S,max           : {vmax:+.5f} a.u. "
+                 f"({vmax*627.5095:+.2f} kcal/(mol*e))\n")
+        fh.write(f"Farbskala         : -{rng:.4f} .. +{rng:.4f} a.u. ({how})\n")
+        fh.write(f"Transparenz       : {args.transparency}\n")
+        fh.write(f"Hintergrund       : {', '.join(args.backgrounds)}\n")
+        fh.write(f"Bildgroesse       : {args.width} x {args.height} px, "
+                 f"{args.dpi} dpi\n")
+        fh.write(f"Projektion        : orthoskopisch\n")
+        fh.write(f"Ansichten         : {', '.join(views.keys())}\n")
+    print(f"    -> {settings}")
+
+    return {
+        "prefix": args.prefix,
+        "struct": args.struct,
+        "grid": "x".join(str(v) for v in dens.shape),
+        "iso": args.iso,
+        "vmin": vmin,
+        "vmax": vmax,
+        "shell_points": npts,
+        "esp_range": rng,
+        "esp_range_mode": "auto" if args.esp_range == "auto" else "fixed",
+        "files": written,
+        "settings_file": settings,
+    }
+
+
+def colorbar(path, rng, dpi=300):
+    """Waagerechte Farbskala als separates PNG (braucht matplotlib)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib.colorbar import ColorbarBase
+    from matplotlib.colors import Normalize
+
+    cmap = LinearSegmentedColormap.from_list(
+        "esp", ["#d40000", "#ffffff", "#0030d4"])
+
+    fig = plt.figure(figsize=(4.2, 0.75))
+    ax = fig.add_axes([0.06, 0.45, 0.88, 0.30])
+    cb = ColorbarBase(ax, cmap=cmap, norm=Normalize(-rng, rng),
+                      orientation="horizontal")
+    cb.set_label("ESP  /  a.u.", fontsize=9)
+    cb.set_ticks([-rng, -rng / 2, 0, rng / 2, rng])
+    cb.ax.tick_params(labelsize=8)
+    fig.savefig(path, dpi=dpi, transparent=False, facecolor="white")
+    plt.close(fig)
+    return path
+
+
+# ----------------------------------------------------------------------------
+# CLI
+# ----------------------------------------------------------------------------
+
+def autodetect(pattern_list):
+    for pat in pattern_list:
+        hits = sorted(glob.glob(pat))
+        if hits:
+            return hits[0]
+    return None
+
+
+def main(argv):
+    p = argparse.ArgumentParser(
+        description="Standardisierte ESP-Bilder aus Cube-Dateien rendern.")
+    p.add_argument("--density", default=None, help="Cube der Elektronendichte")
+    p.add_argument("--esp", default=None, help="Cube des ESP")
+    p.add_argument("--struct", default=None,
+                   help="Strukturdatei (.mol/.sdf/.pdb/.xyz)")
+    p.add_argument("--prefix", default=None, help="Praefix der Bildnamen")
+    p.add_argument("--outdir", default="images", help="Ausgabeordner")
+    p.add_argument("--iso", type=float, default=0.001,
+                   help="Isowert der Dichteflaeche in a.u. (Standard 0.001)")
+    p.add_argument("--esp-range", default="auto",
+                   help="'auto' oder fester Wert in a.u., z.B. 0.03")
+    p.add_argument("--transparency", type=float, default=0.15,
+                   help="Oberflaechentransparenz 0..1 (Standard 0.15). "
+                        "0 = opak, klarste Farben; 0.3+ macht die Profil- "
+                        "und Frontalansichten unleserlich, weil man durch "
+                        "das ganze Molekuel hindurchschaut.")
+    p.add_argument("--backgrounds", nargs="+", default=["white"],
+                   help="Hintergrundfarben, z.B. white black")
+    p.add_argument("--views", nargs="+", default=None,
+                   choices=["pi", "edge", "sigma"],
+                   help="Teilmenge der Ansichten (Standard: alle drei)")
+    p.add_argument("--width", type=int, default=2000)
+    p.add_argument("--height", type=int, default=1600)
+    p.add_argument("--dpi", type=int, default=300)
+    p.add_argument("--buffer", type=float, default=2.4,
+                   help="Rand um das Molekuel in Angstrom")
+    args = p.parse_args(argv)
+
+    args.density = args.density or autodetect(["td.cube", "*dens*.cube"])
+    args.esp = args.esp or autodetect(["tp.cube", "*esp*.cube", "*pot*.cube"])
+    args.struct = args.struct or autodetect(
+        ["*.mol", "*.sdf", "*.pdb", "*.xyz"])
+
+    missing = [n for n, v in (("--density", args.density),
+                              ("--esp", args.esp),
+                              ("--struct", args.struct)) if not v]
+    if missing:
+        raise SystemExit("Fehlende Eingaben: " + ", ".join(missing))
+
+    if not args.prefix:
+        base = os.path.splitext(os.path.basename(args.struct))[0]
+        args.prefix = base.split("_")[0] or "molecule"
+
+    print("=" * 70)
+    print("render_esp.py - standardisierte ESP-Bilder")
+    print("=" * 70)
+    print(f"  Struktur : {args.struct}")
+    print(f"  Dichte   : {args.density}")
+    print(f"  ESP      : {args.esp}")
+    print(f"  Praefix  : {args.prefix}")
+
+    render_all(args)
+    print("Fertig.")
+    return 0
+
+
+# Ausfuehren, sobald das Skript NICHT als Modul importiert wird.
+#
+# Warum nicht das uebliche  if __name__ == "__main__"  ?
+# PyMOL fuehrt uebergebene .py-Dateien mit exec() in einem eigenen Namensraum
+# aus, in dem __name__ eben nicht "__main__" ist. Mit der Standardabfrage
+# passiert bei  pymol -cq render_esp.py -- ...  schlicht gar nichts:
+# das Skript wird gelesen, alle Funktionen werden definiert, und dann ist
+# Schluss - ohne Fehlermeldung. Genau diese stille Nicht-Ausfuehrung ist
+# schwer zu diagnostizieren, deshalb hier die umgekehrte Abfrage.
+if __name__ != "render_esp":
+    _argv = sys.argv[1:]
+    if "--" in _argv:                  # Aufruf ueber: pymol -cq skript.py -- ...
+        _argv = _argv[_argv.index("--") + 1:]
+    else:
+        # PyMOL schiebt beim Start eigene Argumente in sys.argv. Alles vor
+        # der Skriptdatei wegwerfen, damit argparse nicht darueber stolpert.
+        for _i, _a in enumerate(_argv):
+            if _a.endswith("render_esp.py"):
+                _argv = _argv[_i + 1:]
+                break
+    main(_argv)

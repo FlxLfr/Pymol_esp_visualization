@@ -1,0 +1,15 @@
+# Conda environment for the ESP visualisation workflow.
+#
+#   conda env create -f environment.yml
+#   conda activate esp
+#
+# Kept deliberately small: PyMOL pulls in Qt and a long dependency chain, so it
+# lives in its own environment rather than in `base`.
+name: esp
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pymol-open-source
+  - numpy
+  - matplotlib          # only needed for the separate colour-bar figure

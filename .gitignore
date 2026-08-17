@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------------------
+# Large data files.
+#
+# A full-resolution cube of a 251^3 grid is ~200 MB and the raw Turbomole
+# pointval output is ~1.25 GB per file. GitHub rejects anything above 100 MB,
+# and these are all regenerable from the raw data with xyzToCube.py.
+# ---------------------------------------------------------------------------
+*.cube
+td.xyz
+tp.xyz
+
+# ...except the decimated demo grids, which are small enough to ship so that a
+# fresh clone can be tested immediately (see README, section 10).
+!**/td_demo.cube
+!**/tp_demo.cube
+
+# Scratch space for experiments and large intermediate files
+sandbox/*
+!sandbox/.gitkeep
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---------------------------------------------------------------------------
+# Editors / OS
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
