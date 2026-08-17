@@ -109,9 +109,51 @@ V<sub>S,max</sub>, but Multiwfn goes considerably further.
 
 ## 3. Installation
 
-Create a dedicated conda environment. Keeping it separate from `base` means the
-environment can be recreated exactly, and nothing else on the machine is
-disturbed.
+### 3.1 Prerequisite: a working conda
+
+This workflow needs a **functioning conda installation**. That sounds trivial
+and is the single most likely thing to cost you an afternoon, so it is spelled
+out here.
+
+If you have no conda yet, install
+**[Miniforge](https://conda-forge.org/download/)** — it is free, defaults to the
+conda-forge channel that this workflow uses, and is small. During installation:
+
+| Option | Setting |
+|---|---|
+| Create shortcuts | **yes** — this gives you the "Miniforge Prompt" in the Start menu |
+| Add to PATH | **no** — the installer is right, it causes conflicts |
+| Register as default Python | **no** — leave any existing Python installation alone |
+| Clear package cache | yes |
+
+> **Do not rely on a conda that came bundled with another program.** Several
+> chemistry packages (Schrödinger PyMOL among them) ship their own conda inside
+> their installation folder. It may be incomplete or broken, it is not intended
+> to be used as a general package manager, and — worse — VS Code will happily
+> discover it and remember it as "the" conda of the system. You then get
+> `conda.exe is not a valid application for this operating system platform` on
+> every activation, no matter which interpreter you select. See
+> [Troubleshooting](#11-troubleshooting) for how to get out of that.
+
+Verify that conda works *before* going further:
+
+```bash
+conda --version
+```
+
+On Windows, use the **Miniforge Prompt** from the Start menu. To make conda
+available in PowerShell as well, run once:
+
+```bash
+conda init powershell
+```
+
+then close and reopen every shell.
+
+### 3.2 Create the environment
+
+Keeping it separate from `base` means it can be recreated exactly and nothing
+else on the machine is disturbed.
 
 ```bash
 conda env create -f environment.yml
@@ -125,15 +167,16 @@ conda create -n esp -c conda-forge python=3.12 pymol-open-source numpy matplotli
 conda activate esp
 ```
 
-Verify:
+### 3.3 Verify
 
 ```bash
 python -c "import pymol, numpy, matplotlib; print('ok')"
+python -c "import sys; print(sys.executable)"
 ```
 
-> **Note on Windows.** If `conda` is not found in `cmd.exe` but works inside VS
-> Code, conda is installed but was never added to the system PATH. Run
-> `conda init powershell` once from a shell where it *does* work.
+The second line must point *inside* the `esp` environment. If it points at a
+system Python instead, the environment was not activated — see
+[Troubleshooting](#11-troubleshooting).
 
 ---
 
@@ -162,10 +205,29 @@ At 251³ points that is about 1.25 GB per file. The same information as a
 Gaussian cube is roughly 200 MB, because the cube format stores the grid
 implicitly.
 
-**Prefer `.mol`/`.sdf` over `.xyz` for the structure**: they carry bond
-information, so PyMOL draws proper sticks. A bare `.xyz` without the leading
-atom-count line — which some tools emit — can also confuse PyMOL's reader.
-`xyzToCube.py` handles both.
+### Accepted structure formats
+
+Both `xyzToCube.py` and `render_esp.py` accept the same four formats:
+
+| Format | Notes |
+|---|---|
+| `.xyz` | `Symbol x y z`. With or without the leading atom-count and comment lines — a bare coordinate list is accepted. Unit set by `--struct-unit` (default Å). |
+| `.mol` | MDL molfile, V2000 and V3000. **Coordinates come *before* the element symbol**, the reverse of xyz. Always Å. |
+| `.sdf` | SD-file; only the first record (up to `$$$$`) is read. Always Å. |
+| `.pdb` | `ATOM`/`HETATM` records. Element from columns 77–78, otherwise derived from the atom name. Always Å. |
+
+`--struct-unit` applies to `.xyz` only. Molfile and PDB are in Ångström by
+definition, so the option is ignored for them.
+
+**Prefer `.mol`/`.sdf` over `.xyz`**: they carry bond information, so PyMOL draws
+proper sticks instead of guessing connectivity from distances.
+
+**Give both scripts the same structure file.** `xyzToCube.py` writes the atom
+positions into the cube header, `render_esp.py` hands the structure to PyMOL for
+the stick model. If you feed them two different files and those files ever
+disagree — a different conformer, a different atom order — the skeleton will sit
+offset from its own surface, and **nothing will warn you**. One file for both
+removes the failure mode entirely.
 
 ---
 
@@ -175,6 +237,9 @@ atom-count line — which some tools emit — can also confuse PyMOL's reader.
 cd scripts
 python xyzToCube.py --struct ../path/to/molecule.mol ../path/to/td.xyz ../path/to/tp.xyz --pymol
 ```
+
+`--struct` takes `.xyz`, `.mol`, `.sdf` or `.pdb` — see
+[§4](#accepted-structure-formats).
 
 This writes `td.cube`, `tp.cube` and (with `--pymol`) a ready-to-use `esp.pml`
 next to the input.
@@ -430,7 +495,60 @@ scale bar.
 
 **`conda: command not found` in `cmd.exe` although it works in VS Code.**
 Conda is installed but not on the system PATH; VS Code activates it explicitly.
-Run `conda init powershell` (or `conda init cmd.exe`) once.
+Run `conda init powershell` (or `conda init cmd.exe`) once from a shell where
+conda *does* work — on Windows, the Miniforge Prompt.
+
+**`conda.exe is not a valid application for this operating system platform`.**
+The conda being invoked is a broken one bundled with another program. Find out
+which one is configured:
+
+```powershell
+$env:CONDA_EXE
+```
+
+If that prints a path inside some application's folder rather than your
+Miniforge installation, that is the culprit. It can come from three places —
+check them in this order:
+
+1. **A stale PowerShell profile.** `Test-Path $PROFILE`; if `True`, open it with
+   `notepad $PROFILE` and delete the block referring to the foreign conda.
+2. **A permanent environment variable.**
+   `[Environment]::GetEnvironmentVariable("CONDA_EXE","User")` — clear it with
+   `[Environment]::SetEnvironmentVariable("CONDA_EXE",$null,"User")`.
+3. **VS Code.** If the variable is set *only* inside the VS Code terminal and
+   nowhere else, the Python extension is responsible. Open user settings
+   (`Ctrl+Shift+P` → "Preferences: Open User Settings (JSON)") and point it at
+   the right conda:
+
+   ```json
+   "python.condaPath": "C:\\Users\\<you>\\miniforge3\\Scripts\\conda.exe"
+   ```
+
+   Then check `.vscode/settings.json` in the repository for a stale
+   `condaPath` or `defaultInterpreterPath`, and reload the window.
+
+Note that selecting the right interpreter is **not** sufficient: the interpreter
+decides *which* environment is activated, `CONDA_EXE` decides *what does the
+activating*.
+
+**The VS Code terminal uses the wrong Python.**
+`python -c "import sys; print(sys.executable)"` shows a system Python instead of
+the environment. Select the interpreter explicitly: `Ctrl+Shift+P` → "Python:
+Select Interpreter" → **"Enter interpreter path…"** → the full path to
+`envs/esp/python.exe`. Do not pick from the list if it still contains stale
+entries. Then close *all* terminals and open a new one.
+
+As a fallback that depends on no shell configuration at all, call the
+environment's interpreter directly:
+
+```powershell
+& "C:\Users\<you>\miniforge3\envs\esp\python.exe" render_esp.py --prefix molecule
+```
+
+**`Unbekanntes Element 0.0000` / `Unknown element 0.0000` from `xyzToCube.py`.**
+Fixed — the script now detects molfiles. If you see this on an older copy, the
+structure file is an MDL molfile being parsed as xyz: molfiles list the
+coordinates before the element symbol.
 
 **Transparent surfaces show artefacts where atoms overlap.**
 `set transparency_mode, 2` — without it PyMOL sorts transparent faces

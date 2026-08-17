@@ -51,6 +51,12 @@ verwenden::
 
     python xyzToCube.py --struct brombenzol_aro_opti.xyz td.xyz tp.xyz --stride 2
 
+Als Strukturdatei werden ``.xyz``, ``.mol``, ``.sdf`` und ``.pdb`` akzeptiert -
+dieselben Formate wie in render_esp.py. Empfehlung: beiden Skripten *dieselbe*
+Datei geben. Sonst stammen die Atome im Cube-Header aus der einen und die
+Staebchen in PyMOL aus der anderen Quelle, und eine Abweichung zwischen beiden
+faellt nicht auf, weil keine Fehlermeldung kommt.
+
 Nur numpy wird benoetigt (``pip install numpy``).
 """
 
@@ -92,55 +98,175 @@ CHUNK_BYTES = 1 << 24                      # 16 MB Lesepuffer
 # Strukturdatei einlesen
 # ----------------------------------------------------------------------------
 
-def read_structure(path: str, unit: str = "angstrom"):
-    """Liest eine (auch nicht ganz standardkonforme) xyz-Datei.
+def _symbol_to_z(sym: str, path: str) -> int:
+    """Elementsymbol (oder Ordnungszahl) -> Ordnungszahl."""
+    key = sym.strip().capitalize().upper()
+    if key in SYMBOL_TO_Z:
+        return SYMBOL_TO_Z[key]
+    if re.fullmatch(r"\d+", sym.strip()):
+        return int(sym)                                # Ordnungszahl statt Symbol
+    raise ValueError(
+        f"Unbekanntes Element '{sym}' in {path}. "
+        f"Bitte die Liste ELEMENTS im Skript ergaenzen."
+    )
+
+
+def _read_xyz(lines, path):
+    """xyz-Format: Zeilen ``Symbol x y z``.
 
     Akzeptiert sowohl das Standardformat (Atomanzahl + Kommentarzeile + Atome)
-    als auch eine nackte Liste ``Symbol x y z``, wie Turbomole-Workflows sie
-    haeufig produzieren.
-
-    Rueckgabe: Liste von ``(Z, x, y, z)`` mit Koordinaten in **Bohr**.
+    als auch eine nackte Koordinatenliste, wie Turbomole-Workflows sie haeufig
+    produzieren.
     """
-    atoms = []
-    with open(path, "r", encoding="utf-8", errors="replace") as fh:
-        lines = fh.readlines()
-
-    # Standard-xyz erkennen: erste Zeile ist eine einzelne ganze Zahl
     start = 0
     first = lines[0].strip() if lines else ""
     if re.fullmatch(r"\d+", first):
         start = 2                                     # Anzahl + Kommentar ueberspringen
 
+    atoms = []
     for line in lines[start:]:
         parts = line.split()
         if len(parts) < 4:
             continue
-        sym = parts[0]
         try:
             x, y, z = (float(parts[1]), float(parts[2]), float(parts[3]))
         except ValueError:
             continue                                   # Kommentar-/Muellzeile
+        atoms.append((_symbol_to_z(parts[0], path), x, y, z))
+    return atoms
 
-        key = sym.strip().capitalize().upper()
-        if key in SYMBOL_TO_Z:
-            znum = SYMBOL_TO_Z[key]
-        elif re.fullmatch(r"\d+", sym):
-            znum = int(sym)                            # Ordnungszahl statt Symbol
-        else:
-            raise ValueError(
-                f"Unbekanntes Element '{sym}' in {path}. "
-                f"Bitte die Liste ELEMENTS im Skript ergaenzen."
-            )
-        atoms.append((znum, x, y, z))
+
+def _read_molfile(lines, path):
+    """MDL-Molfile / SD-File (.mol, .sdf), V2000 und V3000.
+
+    Aufbau V2000::
+
+        Zeile 1   Titel
+        Zeile 2   Programmzeile
+        Zeile 3   Kommentar
+        Zeile 4   Zaehlzeile:  " 12 12  0 ... V2000"
+        dann      je Atom:  x  y  z  Symbol  ...      <- Koordinaten ZUERST
+        dann      Bindungsblock
+
+    Achtung: die Spaltenreihenfolge ist genau umgekehrt zu xyz. Genau daran
+    scheiterte diese Funktion frueher mit "Unbekanntes Element 0.0000".
+
+    Bei SD-Files wird nur der erste Datensatz gelesen (bis ``$$$$``).
+    Molfile-Koordinaten sind per Definition in Angstrom.
+    """
+    atoms = []
+
+    # --- V3000 ---------------------------------------------------------
+    if any("V3000" in ln for ln in lines[:8]):
+        inside = False
+        for line in lines:
+            s = line.strip()
+            if s.startswith("M  V30 BEGIN ATOM"):
+                inside = True
+                continue
+            if s.startswith("M  V30 END ATOM"):
+                break
+            if inside and s.startswith("M  V30"):
+                # M  V30 <index> <symbol> <x> <y> <z> <aamap> ...
+                parts = s.split()
+                if len(parts) >= 7:
+                    atoms.append((_symbol_to_z(parts[3], path),
+                                  float(parts[4]), float(parts[5]),
+                                  float(parts[6])))
+        return atoms
+
+    # --- V2000 ---------------------------------------------------------
+    if len(lines) < 5:
+        raise ValueError(f"{path}: zu kurz fuer ein Molfile.")
+
+    counts = lines[3]
+    try:
+        natoms = int(counts[0:3])
+    except ValueError:
+        raise ValueError(
+            f"{path}: Zaehlzeile (Zeile 4) nicht lesbar: {counts.strip()!r}")
+
+    for line in lines[4:4 + natoms]:
+        parts = line.split()
+        if len(parts) < 4:
+            raise ValueError(f"{path}: Atomzeile unvollstaendig: {line.strip()!r}")
+        x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
+        atoms.append((_symbol_to_z(parts[3], path), x, y, z))
+
+    return atoms
+
+
+def _read_pdb(lines, path):
+    """PDB: ATOM-/HETATM-Zeilen, Koordinaten in Angstrom.
+
+    Das Elementsymbol steht in den Spalten 77-78; fehlt es, wird es aus dem
+    Atomnamen (Spalten 13-16) abgeleitet.
+    """
+    atoms = []
+    for line in lines:
+        if not line.startswith(("ATOM  ", "HETATM")):
+            continue
+        x = float(line[30:38])
+        y = float(line[38:46])
+        z = float(line[46:54])
+        sym = line[76:78].strip()
+        if not sym:
+            name = line[12:16].strip()
+            sym = re.sub(r"[^A-Za-z]", "", name)[:2]
+            if len(sym) == 2 and sym.capitalize().upper() not in SYMBOL_TO_Z:
+                sym = sym[0]
+        atoms.append((_symbol_to_z(sym, path), x, y, z))
+    return atoms
+
+
+def read_structure(path: str, unit: str = "angstrom"):
+    """Liest eine Strukturdatei und liefert die Atome in **Bohr**.
+
+    Unterstuetzt:
+
+    ==========  =====================================================
+    ``.xyz``    ``Symbol x y z``, mit oder ohne Kopfzeilen
+    ``.mol``    MDL-Molfile V2000/V3000 (Koordinaten *vor* dem Symbol)
+    ``.sdf``    SD-File, erster Datensatz
+    ``.pdb``    ATOM-/HETATM-Zeilen
+    ==========  =====================================================
+
+    Rueckgabe: Liste von ``(Z, x, y, z)``.
+
+    ``unit`` gilt nur fuer xyz-Dateien - Molfile und PDB sind per Definition
+    in Angstrom, dort wird die Angabe ignoriert.
+    """
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        lines = fh.read().splitlines()
+
+    if not lines:
+        raise ValueError(f"{path} ist leer.")
+
+    ext = os.path.splitext(path)[1].lower()
+
+    if ext in (".mol", ".sdf", ".sd"):
+        # SD-File: nur der erste Datensatz
+        for i, ln in enumerate(lines):
+            if ln.startswith("$$$$"):
+                lines = lines[:i]
+                break
+        atoms = _read_molfile(lines, path)
+        file_unit = "angstrom"
+    elif ext in (".pdb", ".ent"):
+        atoms = _read_pdb(lines, path)
+        file_unit = "angstrom"
+    else:
+        atoms = _read_xyz(lines, path)
+        file_unit = unit
 
     if not atoms:
         raise ValueError(f"Keine Atome in {path} gefunden.")
 
-    if unit == "angstrom":
+    if file_unit == "angstrom":
         atoms = [(z, x * BOHR_PER_ANGSTROM,
                      y * BOHR_PER_ANGSTROM,
                      zz * BOHR_PER_ANGSTROM) for (z, x, y, zz) in atoms]
-    elif unit != "bohr":
+    elif file_unit != "bohr":
         raise ValueError("unit muss 'angstrom' oder 'bohr' sein")
 
     return atoms
@@ -444,10 +570,10 @@ def main(argv=None):
     p.add_argument("grids", nargs="+",
                    help="Turbomole-Gitterdateien (z.B. td.xyz tp.xyz)")
     p.add_argument("--struct", "-s", required=True,
-                   help="Strukturdatei mit den Atomkoordinaten (xyz)")
+                   help="Strukturdatei: .xyz, .mol, .sdf oder .pdb")
     p.add_argument("--struct-unit", choices=["angstrom", "bohr"],
                    default="angstrom",
-                   help="Einheit der Strukturdatei (Standard: angstrom)")
+                   help="Einheit der Strukturdatei (Standard: angstrom); gilt nur fuer .xyz - .mol/.sdf/.pdb sind immer Angstrom")
     p.add_argument("--outdir", "-o", default=None,
                    help="Ausgabeverzeichnis (Standard: neben der Eingabe)")
     p.add_argument("--stride", type=int, default=1,
