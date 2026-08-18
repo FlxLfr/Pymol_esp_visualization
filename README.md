@@ -42,9 +42,10 @@ functional group and an anisotropic halogen.</em></p>
 8. [Step 4 — Several molecules at once](#8-step-4--several-molecules-at-once)
 9. [Choosing the colour scale](#9-choosing-the-colour-scale)
 10. [Parameter study](#10-parameter-study)
-11. [Repository layout](#11-repository-layout)
-12. [Troubleshooting](#12-troubleshooting)
-13. [References](#13-references)
+11. [Results](#11-results)
+12. [Repository layout](#12-repository-layout)
+13. [Troubleshooting](#13-troubleshooting)
+14. [References](#14-references)
 
 ---
 
@@ -142,7 +143,7 @@ conda-forge channel that this workflow uses, and is small. During installation:
 > discover it and remember it as "the" conda of the system. You then get
 > `conda.exe is not a valid application for this operating system platform` on
 > every activation, no matter which interpreter you select. See
-> [Troubleshooting](#12-troubleshooting) for how to get out of that.
+> [Troubleshooting](#13-troubleshooting) for how to get out of that.
 
 Verify that conda works *before* going further:
 
@@ -185,7 +186,7 @@ python -c "import sys; print(sys.executable)"
 
 The second line must point *inside* the `esp` environment. If it points at a
 system Python instead, the environment was not activated — see
-[Troubleshooting](#12-troubleshooting).
+[Troubleshooting](#13-troubleshooting).
 
 ---
 
@@ -818,7 +819,109 @@ minutes for 4-bromoacetophenone. The two factors multiply — 1.8× more points 
 
 ---
 
-## 11. Repository layout
+## 11. Results
+
+`results/` holds the image sets that this project actually delivers — seven
+molecules, each with the three standard views, its colour bar and its
+`*_settings.txt`. Unlike `sandbox/`, this folder is committed: the images are the
+deliverable, and `*_settings.txt` next to each one is the record of how it was
+made.
+
+```
+results/
+├── chlorbenzol/          chlorobenzene       ┐
+├── brombenzol/           bromobenzene        │ provided Turbomole data
+├── iodbenzol/            iodobenzene         ┘
+├── chlormethan/          chloromethane       ┐
+├── 4-bromacetophenon/    4-bromoacetophenone │ generated with
+├── paracetamol/          paracetamol         │ tools/CreateTpTdFromSmiles.py
+└── halcion/              triazolam           ┘
+```
+
+### 11.1 Surface ESP values
+
+All at ρ = 0.001 a.u.; σ-hole and belt from the ray method. Atom labels are
+1-based indices into the respective structure file.
+
+| molecule | grid | Δ/Bohr | range | V<sub>S,min</sub> | V<sub>S,max</sub> | σ-hole | kcal/mol | belt |
+|---|---|---|---|---|---|---|---|---|
+| chlorobenzene | 251³ | 0.12 | ±0.035 | −0.0190 (Cl12) | +0.0313 (H9) | +0.0078 | +4.9 | −0.0190 |
+| bromobenzene | 251³ | 0.12 | ±0.035 | −0.0188 (Br12) | +0.0315 (H7) | +0.0162 | +10.2 | −0.0188 |
+| iodobenzene | 251³ | 0.12 | ±0.035 | −0.0169 (I12) | +0.0317 (H5) | +0.0255 | +16.0 | −0.0169 |
+| chloromethane | 40×38×38 | 0.40 | ±0.035 | −0.0283 (Cl1) | +0.0323 (H3) | **−0.0083** | **−5.2** | −0.0283 |
+| 4-bromoacetophenone | 114×86×80 | 0.25 | ±0.070 | −0.0653 (O3) | +0.0476 (H14) | +0.0230 | +14.5 | −0.0167 |
+| triazolam | 132×101×106 | 0.25 | ±0.085 | −0.0843 (N4) | +0.0543 (H27) | +0.0171 (Cl21) | +10.7 | −0.0184 |
+| " | | | | | | +0.0144 (Cl11) | +9.0 | −0.0110 |
+| paracetamol | 122×67×86 | 0.25 | ±0.090 | −0.0737 (O3) | +0.0898 (H20) | — | — | — |
+
+What the set is meant to show:
+
+* **The halobenzene series** is the trend Cl < Br < I, a factor of 3.3 across
+  the three — while their global V<sub>S,max</sub> agree to within 0.4 %,
+  because that maximum is the same aromatic C–H in all three. This is the
+  central argument of [§7](#which-number-describes-the-σ-hole).
+* **Chloromethane** is the negative control: an *alkyl* chloride has no σ-hole
+  at all. The value on the C–Cl axis is −5.2 kcal/mol — still negative. The
+  σ-hole is a property of the C–X bond's electronic environment, not of the
+  halogen alone.
+* **4-Bromoacetophenone** separates the belt from the global minimum for the
+  first time: V<sub>S,min</sub> sits on the carbonyl oxygen at −41.0, the belt
+  on the bromine at −10.5. In the halobenzenes those two lines were always the
+  same number.
+* **Paracetamol** is the halogen-free case — no σ-hole block, orientation from
+  the principal axes, dash in the table.
+* **Triazolam** is the two-halogen case, and the two chlorines differ by 19 %
+  despite being the same element: +10.7 on the pendant 2′-phenyl chlorine
+  against +9.0 on the fused-ring one.
+
+### 11.2 What these numbers may and may not be compared with
+
+**The first three rows and the last four are not comparable with each other.**
+Chlorobenzene, bromobenzene and iodobenzene come from the provided Turbomole
+calculation. The other four were generated with `tools/CreateTpTdFromSmiles.py`
+at HF/def2-SVP on an MMFF94 geometry — a different method, a different basis
+set, and a force-field geometry rather than an optimised one. Any of those three
+differences moves V<sub>S,min</sub> and V<sub>S,max</sub> by more than the
+effects being discussed. See `tools/README.txt`, section "LIMITATIONS".
+
+Within each group the comparison is sound: the three halobenzenes were computed
+identically, and the four generated sets share method, basis and grid spacing.
+
+The colour scales tell the same story. All four molecules at ±0.035 can be
+compared *by eye*; 4-bromoacetophenone, triazolam and paracetamol each carry
+their own range because a shared one would render the halogen regions
+colourless. Always read the colour bar shipped with the image, never the colours
+alone.
+
+Two further caveats:
+
+* **Chloromethane's grid is 0.40 Bohr**, above the 0.30 Bohr threshold at which
+  the script warns. Per §10.2 that biases the value low by a few percent. It does not affect the conclusion — the sign is
+  what matters here, and −5.2 is nowhere near zero.
+* The maximum density value in the provided data suggests **bromine was treated
+  all-electron while iodine used an effective core potential**. That is a
+  question for the supervisor; if so, the Br/I step in the table is not a pure
+  basis-set-consistent comparison.
+
+### 11.3 Provenance of the images
+
+> **Note.** `chlorbenzol/`, `chlormethan/` and `iodbenzol/` were rendered with an
+> earlier version of `render_esp.py` — their `*_settings.txt` still uses the
+> single-halogen layout (`sigma-Loch (Cl)` and a separate `Halogenguertel` line)
+> rather than the per-halogen one. The **numbers are unaffected**: all three
+> molecules carry one halogen and are planar or axially symmetric, so neither the
+> outermost-crossing fix nor the true-axis fix changes anything for them, and the
+> values above match a current run. Still, a deliverable set should come from one
+> script version. Re-rendering them is one command and the cube files are
+> unchanged:
+>
+> ```bash
+> python run_all.py --root ../sandbox --only chlorbenzol chlormethan iodbenzol
+> ```
+
+---
+
+## 12. Repository layout
 
 ```
 esp_visualization/
@@ -838,9 +941,22 @@ esp_visualization/
 │       ├── td.xyz                raw pointval grids, decimated to 0.75 Bohr
 │       ├── tp.xyz
 │       └── images/               reference images (rendered at 114×86×80)
+├── results/                      the delivered image sets — see §11
+│   ├── chlorbenzol/  brombenzol/  iodbenzol/       provided Turbomole data
+│   ├── chlormethan/  4-bromacetophenon/
+│   ├── paracetamol/  halcion/                      generated test data
+│   └── <molecule>/               *_pi.png  *_edge.png  *_sigma.png
+│                                 *_colorbar.png  *_settings.txt
+├── tools/                        test-data generator (own environment)
 ├── docs/                         exported PDF of this SOP
 └── sandbox/                      your own data and experiments, not tracked
 ```
+
+**`results/` is committed, `sandbox/` is not.** The images in `results/` are the
+deliverable and are small enough to track (PNG + text, a few hundred KB each);
+the cube files and pointval grids they were made from stay in `sandbox/` and are
+ignored. Each result folder carries its own `*_settings.txt`, so an image never
+travels without the parameters that produced it.
 
 **`reference/` and `sandbox/` do different jobs.** `reference/` holds a
 known-good example: the images this workflow is supposed to produce, the
@@ -883,7 +999,7 @@ of the scripts elsewhere — that is exactly how two versions drift apart.
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 **`ContourSurfVolume: VTKm not available, falling back to internal implementation`**
 Harmless, and it appears on every run. VTK-m is an optional parallel contouring
@@ -981,7 +1097,7 @@ incorrectly. The provided scripts set this already.
 
 ---
 
-## 13. References
+## 14. References
 
 **Method / convention**
 
