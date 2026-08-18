@@ -1,0 +1,18 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : ../sandbox\chlorbenzol\chlorbenzol_aro_opti.mol
+Dichte-Cube       : ../sandbox\chlorbenzol\td.cube
+ESP-Cube          : ../sandbox\chlorbenzol\tp.cube
+Gitter            : 251 x 251 x 251
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.01896 a.u. (-11.90 kcal/(mol*e))  auf Cl12
+V_S,max           : +0.03129 a.u. (+19.63 kcal/(mol*e))  auf H9
+sigma-Loch (Cl)   : +0.00782 a.u. (+4.91 kcal/(mol*e))  [interpoliert]
+Gitterabstand     : 0.1200 Bohr
+Halogenguertel    : -0.01896 a.u. (-11.90 kcal/(mol*e))
+Farbskala         : -0.0350 .. +0.0350 a.u. (automatisch aus den Daten)
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma

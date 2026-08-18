@@ -1,0 +1,16 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : ../sandbox\paracetamol\paracetamol.mol
+Dichte-Cube       : ../sandbox\paracetamol\td.cube
+ESP-Cube          : ../sandbox\paracetamol\tp.cube
+Gitter            : 122 x 67 x 86
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.07366 a.u. (-46.22 kcal/(mol*e))  auf O3
+V_S,max           : +0.08975 a.u. (+56.32 kcal/(mol*e))  auf H20
+Gitterabstand     : 0.2500 Bohr
+Farbskala         : -0.0900 .. +0.0900 a.u. (automatisch aus den Daten)
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma

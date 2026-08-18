@@ -1,0 +1,18 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : ../sandbox\chlormethan\chlormethan.mol
+Dichte-Cube       : ../sandbox\chlormethan\td.cube
+ESP-Cube          : ../sandbox\chlormethan\tp.cube
+Gitter            : 40 x 38 x 38
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.02832 a.u. (-17.77 kcal/(mol*e))  auf Cl1
+V_S,max           : +0.03228 a.u. (+20.26 kcal/(mol*e))  auf H3
+sigma-Loch (Cl)   : -0.00826 a.u. (-5.18 kcal/(mol*e))  [interpoliert]
+Gitterabstand     : 0.4000 Bohr
+Halogenguertel    : -0.02832 a.u. (-17.77 kcal/(mol*e))
+Farbskala         : -0.0350 .. +0.0350 a.u. (automatisch aus den Daten)
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma

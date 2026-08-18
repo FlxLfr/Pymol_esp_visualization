@@ -1,0 +1,21 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : ../sandbox\halcion\Halcion.mol
+Dichte-Cube       : ../sandbox\halcion\td.cube
+ESP-Cube          : ../sandbox\halcion\tp.cube
+Gitter            : 132 x 101 x 106
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.08429 a.u. (-52.89 kcal/(mol*e))  auf N4
+V_S,max           : +0.05432 a.u. (+34.09 kcal/(mol*e))  auf H27
+sigma-Loch (Cl21) : +0.01709 a.u. (+10.73 kcal/(mol*e))  [interpoliert]
+Guertel    (Cl21) : -0.01836 a.u. (-11.52 kcal/(mol*e))
+sigma-Loch (Cl11) : +0.01440 a.u. (+9.03 kcal/(mol*e))  [interpoliert]
+Guertel    (Cl11) : -0.01095 a.u. (-6.87 kcal/(mol*e))
+sigma-Ansicht auf : Cl21 (staerkstes sigma-Loch)
+Gitterabstand     : 0.2500 Bohr
+Farbskala         : -0.0850 .. +0.0850 a.u. (automatisch aus den Daten)
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma

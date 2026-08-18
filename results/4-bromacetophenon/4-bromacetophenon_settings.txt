@@ -1,0 +1,18 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : ../sandbox\4-bromacetophenon\4-bromacetophenon.mol
+Dichte-Cube       : ../sandbox\4-bromacetophenon\td.cube
+ESP-Cube          : ../sandbox\4-bromacetophenon\tp.cube
+Gitter            : 114 x 86 x 80
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.06532 a.u. (-40.99 kcal/(mol*e))  auf O3
+V_S,max           : +0.04762 a.u. (+29.88 kcal/(mol*e))  auf H14
+sigma-Loch (Br8)  : +0.02303 a.u. (+14.45 kcal/(mol*e))  [interpoliert]
+Guertel    (Br8)  : -0.01673 a.u. (-10.50 kcal/(mol*e))
+Gitterabstand     : 0.2500 Bohr
+Farbskala         : -0.0700 .. +0.0700 a.u. (automatisch aus den Daten)
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma

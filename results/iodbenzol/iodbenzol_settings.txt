@@ -1,0 +1,18 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : ../sandbox\iodbenzol\iodbenzol_aro_opti.mol
+Dichte-Cube       : ../sandbox\iodbenzol\td.cube
+ESP-Cube          : ../sandbox\iodbenzol\tp.cube
+Gitter            : 251 x 251 x 251
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.01685 a.u. (-10.57 kcal/(mol*e))  auf I12
+V_S,max           : +0.03168 a.u. (+19.88 kcal/(mol*e))  auf H5
+sigma-Loch (I )   : +0.02553 a.u. (+16.02 kcal/(mol*e))  [interpoliert]
+Gitterabstand     : 0.1200 Bohr
+Halogenguertel    : -0.01685 a.u. (-10.57 kcal/(mol*e))
+Farbskala         : -0.0350 .. +0.0350 a.u. (automatisch aus den Daten)
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma
