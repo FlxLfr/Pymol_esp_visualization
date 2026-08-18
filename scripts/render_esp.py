@@ -121,6 +121,58 @@ def shell_points(density, esp, origin, voxel, iso=0.001, tol_factor=0.12):
     return pos, esp[mask]
 
 
+def halogen_axes(atoms):
+    """Alle Halogene mit ihrer C-X-Achse.
+
+    Ein Molekuel kann mehr als ein Halogen tragen - Triazolam etwa hat zwei
+    Chloratome in voellig verschiedener elektronischer Umgebung. Frueher nahm
+    der Code stillschweigend ``hal[0]``, also das erste Halogen in der
+    Atomliste; welches das ist, haengt allein an der Reihenfolge im Strukturfile.
+    Ausgewertet wird jetzt jedes einzeln.
+
+    Rueckgabe: Liste von dicts mit
+      index   0-basierter Atomindex des Halogens
+      symbol  Elementsymbol
+      label   Symbol + 1-basierte Nummer, z.B. "Cl12" (wie in der Ausgabe)
+      pos     Koordinaten des Halogens
+      axis    normierte C->X-Achse (zeigt zum sigma-Loch)
+      r_limit maximaler Abstand, in dem die eigene Oberflaeche des Halogens
+              liegen kann (Bohr) - siehe unten
+    Halogene ohne gebundenen Kohlenstoff in Reichweite werden uebersprungen.
+
+    Warum ``r_limit``: bei gefalteten Molekuelen zeigt der Kegel um die C-X-
+    Achse nicht ins Leere, sondern auf einen anderen Molekuelteil. Ohne
+    Abstandsgrenze wird dessen Oberflaeche mitgemessen. Triazolam ist genau so
+    ein Fall - der Kegel um Cl21 trifft die Methylgruppe am Triazolring, und
+    die lieferte ein "sigma-Loch" von +18.8 statt +10.5 kcal/(mol*e). Die
+    rho=0.001-Flaeche eines Halogens liegt bei etwa 1.1 bis 1.2 vdW-Radien;
+    der Faktor 1.6 laesst reichlich Luft und schliesst alles Weitere aus.
+    """
+    coords = np.array([[a[1], a[2], a[3]] for a in atoms])
+    znums = np.array([a[0] for a in atoms])
+    carbons = [i for i, z in enumerate(znums) if z == 6]
+    out = []
+    if not carbons:
+        return out
+    for hi, z in enumerate(znums):
+        if int(z) not in HALOGENS:
+            continue
+        d = np.linalg.norm(coords[carbons] - coords[hi], axis=1)
+        ci = carbons[int(np.argmin(d))]
+        axis = coords[hi] - coords[ci]
+        n = np.linalg.norm(axis)
+        if n < 1e-6:
+            continue
+        out.append({"index": hi,
+                    "symbol": HALOGENS[int(z)],
+                    "label": f"{HALOGENS[int(z)]}{hi + 1}",
+                    "pos": coords[hi],
+                    "axis": axis / n,
+                    "r_limit": (1.6 * VDW_ANGSTROM[int(z)]
+                                * BOHR_PER_ANGSTROM)})
+    return out
+
+
 def local_extrema(pos, vals, atoms,
                   cone_cos=0.80, belt_cos=0.35, belt_factor=1.5):
     """Regionsaufgeloeste Oberflaechen-Extrema.
@@ -150,48 +202,79 @@ def local_extrema(pos, vals, atoms,
         j = int(np.argmin(d))
         out[f"{tag}_atom"] = f"{z_symbol(int(znums[j]))}{j + 1}"
 
-    # --- Halogenregionen ------------------------------------------------
-    hal = [i for i, z in enumerate(znums) if z in HALOGENS]
-    if not hal:
+    # --- Halogenregionen, eines nach dem anderen -------------------------
+    entries = []
+    for hal in halogen_axes(atoms):
+        e = {k: hal[k] for k in ("index", "symbol", "label")}
+        axis = hal["axis"]
+
+        rel = pos - hal["pos"]
+        r = np.linalg.norm(rel, axis=1)
+        r[r == 0] = 1e-9
+        cos = (rel @ axis) / r
+
+        # Abstandsgrenze: sonst zaehlen bei gefalteten Molekuelen Punkte auf
+        # einem ganz anderen Molekuelteil zur Kappe (siehe halogen_axes).
+        cap = (cos > cone_cos) & (r < hal["r_limit"])
+        if cap.sum() >= 5:
+            e["sigma_max"] = float(vals[cap].max())
+            e["sigma_points"] = int(cap.sum())
+            # Wie weit sitzt der gefundene Maximalpunkt von der C-X-Achse
+            # entfernt? Das sigma-Loch ist ein Gipfel AUF der Achse; wird die
+            # vom Gitter nicht getroffen, misst man die Flanke und
+            # unterschaetzt den Wert. Die reine Punktzahl in der Kappe reicht
+            # als Kriterium nicht aus: bei Brombenzol lagen 144 Punkte in der
+            # Kappe, der beste davon aber 1.14 Bohr neben der Achse -
+            # Ergebnis +0.0126 statt +0.0175 auf dem feinen Gitter.
+            j = int(np.argmax(np.where(cap, vals, -np.inf)))
+            e["sigma_offaxis"] = float(r[j] * np.sqrt(max(0.0, 1 - cos[j] ** 2)))
+            # Die sigma-Kappe ist ein kleiner Ausschnitt der Oberflaeche. Auf
+            # einem groben Gitter liegen dort nur wenige Punkte, und das lokale
+            # Maximum wird dann systematisch unterschaetzt.
+            e["sigma_sparse"] = bool(cap.sum() < 30)
+            r_cap = float(r[cap].mean())
+            belt = (np.abs(cos) < belt_cos) & (r < belt_factor * r_cap)
+            if belt.sum() >= 5:
+                e["belt_min"] = float(vals[belt].min())
+                e["belt_points"] = int(belt.sum())
+        entries.append(e)
+
+    if entries:
+        out["halogens"] = entries
+    return out
+
+
+def rank_halogens(entries):
+    """Halogeneintraege nach sigma-Loch absteigend sortieren.
+
+    Eintraege ohne auswertbares sigma-Loch wandern ans Ende. Die Reihenfolge
+    bestimmt die Ausgabe und - ueber den ersten Eintrag - die Orientierung der
+    sigma-Ansicht.
+    """
+    return sorted(entries,
+                  key=lambda e: -e.get("sigma_max", -np.inf))
+
+
+def promote_primary(out):
+    """Kennwerte des staerksten sigma-Lochs zusaetzlich flach in ``out`` legen.
+
+    Damit bleiben Aufrufer, die nur EINEN Wert erwarten (CSV-Spalte
+    ``sigma_hole_au``, Zusammenfassungstabelle), unveraendert lauffaehig; bei
+    einem einzelnen Halogen ist das Ergebnis bitgleich zu vorher.
+    """
+    entries = out.get("halogens") or []
+    if not entries:
         return out
-
-    hi = hal[0]
-    carbons = [i for i, z in enumerate(znums) if z == 6]
-    if not carbons:
-        return out
-    ci = carbons[int(np.argmin(np.linalg.norm(coords[carbons] - coords[hi],
-                                              axis=1)))]
-    axis = coords[hi] - coords[ci]
-    axis = axis / np.linalg.norm(axis)             # C -> X, zeigt zum sigma-Loch
-
-    rel = pos - coords[hi]
-    r = np.linalg.norm(rel, axis=1)
-    r[r == 0] = 1e-9
-    cos = (rel @ axis) / r
-
-    cap = cos > cone_cos
-    if cap.sum() >= 5:
-        out["sigma_max"] = float(vals[cap].max())
-        out["sigma_points"] = int(cap.sum())
-        # Wie weit sitzt der gefundene Maximalpunkt von der C-X-Achse entfernt?
-        # Das sigma-Loch ist ein Gipfel AUF der Achse; wird die vom Gitter nicht
-        # getroffen, misst man die Flanke und unterschaetzt den Wert. Die reine
-        # Punktzahl in der Kappe reicht als Kriterium nicht aus: bei Brombenzol
-        # lagen 144 Punkte in der Kappe, der beste davon aber 1.14 Bohr neben
-        # der Achse - Ergebnis +0.0126 statt +0.0175 auf dem feinen Gitter.
-        j = int(np.argmax(np.where(cap, vals, -np.inf)))
-        out["sigma_offaxis"] = float(r[j] * np.sqrt(max(0.0, 1 - cos[j] ** 2)))
-        # Die sigma-Kappe ist ein kleiner Ausschnitt der Oberflaeche. Auf einem
-        # groben Gitter liegen dort nur wenige Punkte, und das lokale Maximum
-        # wird dann systematisch unterschaetzt.
-        out["sigma_sparse"] = bool(cap.sum() < 30)
-        r_cap = float(r[cap].mean())
-        belt = (np.abs(cos) < belt_cos) & (r < belt_factor * r_cap)
-        if belt.sum() >= 5:
-            out["belt_min"] = float(vals[belt].min())
-            out["belt_points"] = int(belt.sum())
-
-    out["halogen"] = HALOGENS[int(znums[hi])]
+    entries = rank_halogens(entries)
+    out["halogens"] = entries
+    first = entries[0]
+    out["halogen"] = first["symbol"]
+    out["halogen_atom"] = first["label"]
+    out["halogen_index"] = first["index"]
+    for k in ("sigma_max", "sigma_points", "sigma_offaxis", "sigma_sparse",
+              "sigma_angle", "sigma_method", "belt_min", "belt_points"):
+        if k in first:
+            out[k] = first[k]
     return out
 
 
@@ -254,55 +337,59 @@ def sigma_hole_interpolated(density, esp, origin, voxel, atoms, iso=0.001,
     dort V ausgewertet - beides trilinear interpoliert. Das Ergebnis haengt
     nicht mehr davon ab, wo die Gitterpunkte zufaellig liegen.
 
-    Rueckgabe: dict mit sigma_max, belt_min und dem Winkel des Maximums zur
-    Achse; None, wenn kein Halogen vorhanden ist.
+    Traegt das Molekuel mehrere Halogene, wird jedes einzeln abgetastet.
+
+    Rueckgabe: dict {Atomindex: {sigma_max, sigma_angle, sigma_method}};
+    leeres dict, wenn kein Halogen auswertbar ist.
     """
     diag = np.diag(voxel)
     if not np.allclose(voxel, np.diag(diag)):
-        return None                       # nicht achsparallel - Fallback
+        return {}                         # nicht achsparallel - Fallback
     delta = diag
 
-    coords = np.array([[a[1], a[2], a[3]] for a in atoms])
-    znums = np.array([a[0] for a in atoms])
-    hal = [i for i, z in enumerate(znums) if z in HALOGENS]
-    carbons = [i for i, z in enumerate(znums) if z == 6]
-    if not hal or not carbons:
-        return None
+    result = {}
 
-    hi = hal[0]
-    ci = carbons[int(np.argmin(np.linalg.norm(coords[carbons] - coords[hi],
-                                              axis=1)))]
-    axis = coords[hi] - coords[ci]
-    axis = axis / np.linalg.norm(axis)
+    for hal in halogen_axes(atoms):
+        axis = hal["axis"]
+        origin_atom = hal["pos"]
+        dirs = _cone_directions(axis, cone_cos, n_rays)
+        radii = np.arange(1.0, min(r_max, hal["r_limit"]), dr)
 
-    dirs = _cone_directions(axis, cone_cos, n_rays)
-    radii = np.arange(1.0, r_max, dr)
+        best_v, best_cos = None, None
+        for d in dirs:
+            pts = origin_atom + radii[:, None] * d[None, :]
+            rho = _trilinear(density, origin, delta, pts)
+            # INNERSTER Schnittpunkt, von innen nach aussen: der Strahl startet
+            # tief in der Dichte des Halogens, das erste Unterschreiten von iso
+            # ist dessen eigene Oberflaeche. Frueher wurde der aeusserste
+            # Schnittpunkt genommen; bei gefalteten Molekuelen taucht der
+            # Strahl dahinter in einen anderen Molekuelteil ein und misst
+            # dessen Oberflaeche.
+            if rho[0] < iso:
+                continue                  # Strahl startet schon ausserhalb
+            below = np.nonzero(rho < iso)[0]
+            if below.size == 0:
+                continue                  # Flaeche innerhalb r_limit nicht getroffen
+            j = below[0] - 1
+            if j < 0 or j + 1 >= len(radii):
+                continue
+            # lineare Interpolation des Radius am Isowert
+            r0, r1 = radii[j], radii[j + 1]
+            y0, y1 = rho[j], rho[j + 1]
+            rs = r0 + (iso - y0) * (r1 - r0) / (y1 - y0) if y1 != y0 else r0
+            v = float(_trilinear(esp, origin, delta,
+                                 (origin_atom + rs * d)[None, :])[0])
+            if best_v is None or v > best_v:
+                best_v, best_cos = v, float(np.dot(d, axis))
 
-    best_v, best_cos = None, None
-    for d in dirs:
-        pts = coords[hi] + radii[:, None] * d[None, :]
-        rho = _trilinear(density, origin, delta, pts)
-        # aeusserster Schnittpunkt: von aussen nach innen der erste Wert >= iso
-        idx = np.nonzero(rho >= iso)[0]
-        if idx.size == 0:
+        if best_v is None:
             continue
-        j = idx[-1]
-        if j + 1 >= len(radii):
-            continue
-        # lineare Interpolation des Radius am Isowert
-        r0, r1 = radii[j], radii[j + 1]
-        y0, y1 = rho[j], rho[j + 1]
-        rs = r0 + (iso - y0) * (r1 - r0) / (y1 - y0) if y1 != y0 else r0
-        v = float(_trilinear(esp, origin, delta,
-                             (coords[hi] + rs * d)[None, :])[0])
-        if best_v is None or v > best_v:
-            best_v, best_cos = v, float(np.dot(d, axis))
-
-    if best_v is None:
-        return None
-    return {"sigma_max": best_v,
+        result[hal["index"]] = {
+            "sigma_max": best_v,
             "sigma_angle": float(np.degrees(np.arccos(min(1.0, best_cos)))),
             "sigma_method": "interpoliert"}
+
+    return result
 
 
 def nice_range(vmin, vmax, step=0.005):
@@ -318,6 +405,10 @@ def nice_range(vmin, vmax, step=0.005):
 HALOGENS = {9: "F", 17: "Cl", 35: "Br", 53: "I"}
 BOHR_PER_ANGSTROM = 1.8897259886
 
+# van-der-Waals-Radien nach Bondi (J. Phys. Chem. 1964, 68, 441), Angstrom.
+# Nur als Groessenordnung fuer die Abstandsgrenze der sigma-Loch-Suche.
+VDW_ANGSTROM = {9: 1.47, 17: 1.75, 35: 1.85, 53: 1.98}
+
 Z_SYMBOL = {1: "H", 5: "B", 6: "C", 7: "N", 8: "O", 9: "F", 11: "Na",
             12: "Mg", 14: "Si", 15: "P", 16: "S", 17: "Cl", 19: "K",
             20: "Ca", 26: "Fe", 29: "Cu", 30: "Zn", 34: "Se", 35: "Br",
@@ -328,14 +419,29 @@ def z_symbol(z):
     return Z_SYMBOL.get(int(z), f"Z{int(z)}")
 
 
-def molecular_frame(atoms):
+def molecular_frame(atoms, halogen_index=None):
     """Bestimmt ein reproduzierbares Molekuelkoordinatensystem.
 
-    Rueckgabe: (normal, axis, center)
-      normal  Flaechennormale (kleinste Traegheitsausdehnung, nur Schweratome)
-      axis    C->Halogen-Achse; falls kein Halogen: laengste Hauptachse
-      center  geometrischer Mittelpunkt aller Atome
+    ``halogen_index`` waehlt bei mehreren Halogenen aus, welches die Achse
+    festlegt - und damit, auf welches sigma-Loch die sigma-Ansicht blickt.
+    Ohne Angabe wird das erste Halogen in der Atomliste genommen; render_all
+    uebergibt das Halogen mit dem staerksten sigma-Loch.
+
+    Rueckgabe: (normal, axis, sigma_axis, center)
+      normal      Flaechennormale (kleinste Traegheitsausdehnung, Schweratome)
+      axis        IN DIE EBENE PROJIZIERTE C->Halogen-Achse. Sie spannt mit
+                  ``normal`` ein sauberes Rechtssystem auf und richtet die
+                  pi- und edge-Ansicht aus.
+      sigma_axis  die ECHTE C->Halogen-Achse, unprojiziert
+      center      geometrischer Mittelpunkt aller Atome
     Alle Vektoren normiert, Koordinaten in denselben Einheiten wie ``atoms``.
+
+    Warum zwei Achsen: bei planaren Molekuelen sind beide identisch, die
+    Projektion ist dort reine Rundungskosmetik. Bei nicht-planaren Molekuelen
+    dreht sie die Achse aber tatsaechlich weg - bei Triazolam steht die
+    C-Cl21-Bindung 42.9 Grad aus der Ausgleichsebene heraus, und die
+    sigma-Ansicht blickte entsprechend 42.9 Grad am sigma-Loch vorbei. Fuer die
+    sigma-Ansicht ist deshalb ``sigma_axis`` zu verwenden.
     """
     coords = np.array([[a[1], a[2], a[3]] for a in atoms])
     znums = np.array([a[0] for a in atoms])
@@ -355,7 +461,7 @@ def molecular_frame(atoms):
     axis = None
     hal_idx = [i for i, z in enumerate(znums) if z in HALOGENS]
     if hal_idx:
-        hi = hal_idx[0]
+        hi = halogen_index if halogen_index in hal_idx else hal_idx[0]
         carbons = [i for i, z in enumerate(znums) if z == 6]
         if carbons:
             d = np.linalg.norm(coords[carbons] - coords[hi], axis=1)
@@ -367,14 +473,16 @@ def molecular_frame(atoms):
 
     axis = axis / np.linalg.norm(axis)
     normal = normal / np.linalg.norm(normal)
+    sigma_axis = axis.copy()                 # unveraendert, fuer die sigma-Ansicht
 
-    # axis exakt senkrecht zur Normalen machen (numerisches Aufraeumen)
+    # axis in die Ebene legen - nur fuer pi und edge, die ein Rechtssystem
+    # mit der Normalen brauchen.
     axis = axis - normal * float(np.dot(axis, normal))
     if np.linalg.norm(axis) < 1e-6:
         axis = long_axis
     axis = axis / np.linalg.norm(axis)
 
-    return normal, axis, center
+    return normal, axis, sigma_axis, center
 
 
 def view_matrix(forward, up):
@@ -453,8 +561,11 @@ def render_all(args):
     # nahe der C-X-Achse UND in der duennen Isoschale liegt; bei Brombenzol
     # ergibt sie auf demselben Gitter +7.9 statt +10.1 kcal/(mol*e).
     ray = sigma_hole_interpolated(dens, esp, origin, voxel, atoms, iso=args.iso)
-    if ray:
-        loc.update(ray)
+    for e in loc.get("halogens", []):
+        if e["index"] in ray:
+            e.update(ray[e["index"]])
+    promote_primary(loc)
+    hals = loc.get("halogens", [])
     spacing = float(np.max(np.abs(np.diag(voxel))))
 
     def _fmt(v):
@@ -466,14 +577,30 @@ def render_all(args):
           f"{ansi.atom_label(loc.get('vmin_atom', '?'))}")
     print(f"    V_S,max = {_fmt(vmax)}   auf "
           f"{ansi.atom_label(loc.get('vmax_atom', '?'))}")
-    if "sigma_max" in loc:
-        print(f"  Lokal am Halogen "
-              f"({ansi.element(loc.get('halogen', '?'))}):")
-        tag = loc.get("sigma_method", "punktbasiert")
-        extra = (f"   [{tag}, {loc['sigma_angle']:.1f} Grad zur Achse]"
-                 if "sigma_angle" in loc
-                 else f"   [{tag}, {loc.get('sigma_points', 0)} Punkte]")
-        print(f"    sigma-Loch  = {_fmt(loc['sigma_max'])}{extra}")
+    # Pro Halogen ein Block. Bei genau einem Halogen ist die Ausgabe dieselbe
+    # wie vorher; ab zwei bekommt jedes seine eigene Zeile, und das Halogen,
+    # auf das die sigma-Ansicht blickt, ist markiert.
+    for e in hals:
+        if "sigma_max" not in e:
+            print(f"  Lokal am Halogen ({ansi.element(e['symbol'])}"
+                  f" {e['index'] + 1}): kein auswertbares sigma-Loch "
+                  f"(zu wenige Oberflaechenpunkte in der Kappe)")
+            continue
+        head = (f"  Lokal am Halogen ({ansi.element(e['symbol'])}):"
+                if len(hals) == 1
+                else f"  Lokal an {ansi.atom_label(e['label'])}:")
+        if len(hals) > 1 and e is hals[0]:
+            head += "   <- Achse der sigma-Ansicht"
+        print(head)
+        tag = e.get("sigma_method", "punktbasiert")
+        extra = (f"   [{tag}, {e['sigma_angle']:.1f} Grad zur Achse]"
+                 if "sigma_angle" in e
+                 else f"   [{tag}, {e.get('sigma_points', 0)} Punkte]")
+        print(f"    sigma-Loch  = {_fmt(e['sigma_max'])}{extra}")
+        if "belt_min" in e:
+            print(f"    Guertel     = {_fmt(e['belt_min'])}"
+                  f"   [{e['belt_points']} Punkte]")
+    if hals and any("sigma_max" in e for e in hals):
         # Auch das Strahlverfahren kann die Isoflaeche auf einem groben Gitter
         # nur so genau lokalisieren, wie die Dichte dort aufgeloest ist.
         if spacing > 0.30:
@@ -481,9 +608,6 @@ def render_all(args):
                   f"belastbaren sigma-Loch-Wert zu grob;")
             print(f"      erwartungsgemaess einige Prozent zu niedrig. "
                   f"Feiner rechnen (kleineres --stride).")
-        if "belt_min" in loc:
-            print(f"    Guertel     = {_fmt(loc['belt_min'])}"
-                  f"   [{loc['belt_points']} Punkte]")
         # Hinweis, dass V_S,max nicht auf dem Halogen liegt: bewusst nicht
         # ausgegeben. Bei Arylhalogeniden trifft das praktisch immer zu, die
         # Meldung waere also bei jedem Molekuel identisch und damit wertlos.
@@ -496,7 +620,10 @@ def render_all(args):
         print(f"      --esp-range {rng:.3f}")
 
     # --- Orientierung ---------------------------------------------------
-    normal, axis, center = molecular_frame(atoms)     # in Bohr (Cube-Einheiten)
+    # Bei mehreren Halogenen blickt die sigma-Ansicht auf das staerkste
+    # sigma-Loch - nicht auf das erste Halogen in der Atomliste.
+    normal, axis, sigma_axis, center = molecular_frame(
+        atoms, halogen_index=loc.get("halogen_index"))  # Bohr (Cube-Einheiten)
     center_ang = center / BOHR_PER_ANGSTROM           # PyMOL rechnet in Angstrom
 
     views = {
@@ -504,9 +631,18 @@ def render_all(args):
         "pi":    view_matrix(forward=normal, up=-axis),
         # Blick in der Ebene, senkrecht zur C-X-Achse; C-X-Achse waagerecht
         "edge":  view_matrix(forward=np.cross(normal, axis), up=normal),
-        # Blick von aussen entlang der C-X-Achse auf das sigma-Loch
-        "sigma": view_matrix(forward=axis, up=normal),
+        # Blick von aussen entlang der ECHTEN C-X-Achse auf das sigma-Loch.
+        # Nicht die in die Ebene projizierte Achse verwenden - bei nicht
+        # planaren Molekuelen zeigt die am sigma-Loch vorbei.
+        "sigma": view_matrix(forward=sigma_axis, up=normal),
     }
+    tilt = float(np.degrees(np.arccos(min(1.0, abs(np.dot(sigma_axis, normal))))))
+    tilt = abs(90.0 - tilt)          # Neigung der C-X-Achse gegen die Ebene
+    if hals and tilt > 15.0:
+        print(f"  Hinweis: die C-X-Achse von {hals[0]['label']} steht "
+              f"{tilt:.0f} Grad aus der Ausgleichsebene heraus;")
+        print(f"    sigma-Ansicht folgt der echten Bindungsachse, "
+              f"pi/edge der Ebene.")
     if args.views:
         views = {k: v for k, v in views.items() if k in args.views}
 
@@ -590,15 +726,25 @@ def render_all(args):
         fh.write(f"V_S,max           : {vmax:+.5f} a.u. "
                  f"({vmax*627.5095:+.2f} kcal/(mol*e))  auf "
                  f"{loc.get('vmax_atom','?')}\n")
-        if "sigma_max" in loc:
-            fh.write(f"sigma-Loch ({loc.get('halogen','?'):<2})   : "
-                     f"{loc['sigma_max']:+.5f} a.u. "
-                     f"({loc['sigma_max']*627.5095:+.2f} kcal/(mol*e))"
-                     f"  [{loc.get('sigma_method','punktbasiert')}]\n")
+        # Eine Zeile pro Halogen, absteigend nach sigma-Loch sortiert.
+        for e in hals:
+            tag = f"({e['label']})"
+            if "sigma_max" not in e:
+                fh.write(f"sigma-Loch {tag:<7}: "
+                         f"nicht auswertbar (zu wenige Punkte)\n")
+                continue
+            fh.write(f"sigma-Loch {tag:<7}: "
+                     f"{e['sigma_max']:+.5f} a.u. "
+                     f"({e['sigma_max']*627.5095:+.2f} kcal/(mol*e))"
+                     f"  [{e.get('sigma_method','punktbasiert')}]\n")
+            if "belt_min" in e:
+                fh.write(f"Guertel    {tag:<7}: "
+                         f"{e['belt_min']:+.5f} a.u. "
+                         f"({e['belt_min']*627.5095:+.2f} kcal/(mol*e))\n")
+        if len(hals) > 1:
+            fh.write(f"sigma-Ansicht auf : {hals[0]['label']} "
+                     f"(staerkstes sigma-Loch)\n")
         fh.write(f"Gitterabstand     : {spacing:.4f} Bohr\n")
-        if "belt_min" in loc:
-            fh.write(f"Halogenguertel    : {loc['belt_min']:+.5f} a.u. "
-                     f"({loc['belt_min']*627.5095:+.2f} kcal/(mol*e))\n")
         fh.write(f"Farbskala         : -{rng:.4f} .. +{rng:.4f} a.u. ({how})\n")
         fh.write(f"Transparenz       : {args.transparency}\n")
         fh.write(f"Hintergrund       : {', '.join(args.backgrounds)}\n")
@@ -621,11 +767,17 @@ def render_all(args):
         "vmin_atom": loc.get("vmin_atom"),
         "vmax_atom": loc.get("vmax_atom"),
         "halogen": loc.get("halogen"),
+        "halogen_atom": loc.get("halogen_atom"),
+        "n_halogens": len(hals),
         "sigma_max": loc.get("sigma_max"),
         "sigma_points": loc.get("sigma_points"),
         "sigma_method": loc.get("sigma_method", "punktbasiert"),
         "sigma_angle": loc.get("sigma_angle"),
         "belt_min": loc.get("belt_min"),
+        # Alle Halogene, absteigend nach sigma-Loch. Die flachen Felder oben
+        # beziehen sich auf halogens[0].
+        "halogens": [{k: v for k, v in e.items() if k not in ("pos", "axis")}
+                     for e in hals],
         "files": written,
         "settings_file": settings,
     }

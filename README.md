@@ -41,9 +41,10 @@ functional group and an anisotropic halogen.</em></p>
 7. [Step 3 — Render the standard image set](#7-step-3--render-the-standard-image-set)
 8. [Step 4 — Several molecules at once](#8-step-4--several-molecules-at-once)
 9. [Choosing the colour scale](#9-choosing-the-colour-scale)
-10. [Repository layout](#10-repository-layout)
-11. [Troubleshooting](#11-troubleshooting)
-12. [References](#12-references)
+10. [Parameter study](#10-parameter-study)
+11. [Repository layout](#11-repository-layout)
+12. [Troubleshooting](#12-troubleshooting)
+13. [References](#13-references)
 
 ---
 
@@ -141,7 +142,7 @@ conda-forge channel that this workflow uses, and is small. During installation:
 > discover it and remember it as "the" conda of the system. You then get
 > `conda.exe is not a valid application for this operating system platform` on
 > every activation, no matter which interpreter you select. See
-> [Troubleshooting](#11-troubleshooting) for how to get out of that.
+> [Troubleshooting](#12-troubleshooting) for how to get out of that.
 
 Verify that conda works *before* going further:
 
@@ -184,7 +185,7 @@ python -c "import sys; print(sys.executable)"
 
 The second line must point *inside* the `esp` environment. If it points at a
 system Python instead, the environment was not activated — see
-[Troubleshooting](#11-troubleshooting).
+[Troubleshooting](#12-troubleshooting).
 
 ---
 
@@ -337,7 +338,20 @@ PyMOL's `orient`:
 The plane normal comes from the principal axes of the heavy atoms; the second
 axis is the carbon–halogen bond. Every molecule therefore lands in the same
 orientation automatically — that is what makes the set comparable, and it is why
-no manual rotation is needed or wanted.
+no manual rotation is needed or wanted. If the molecule carries more than one
+halogen, the axis is the C–X bond of the one with the *strongest* σ-hole (see
+[Molecules with more than one halogen](#molecules-with-more-than-one-halogen)).
+
+**Two versions of that axis exist, and the difference matters.** The π and edge
+views need an axis that lies exactly in the fitted plane, so the three views form
+a clean orthogonal triple; the raw C–X vector is projected into the plane for
+them. The σ view must not use that projection — it has to follow the *actual*
+bond. On a planar molecule the two coincide (4-bromoacetophenone: 0.001°) and
+the distinction is invisible. On triazolam the C–Cl21 bond sticks 42.9° out of
+the fitted plane, and the σ view was aiming 42.9° past the σ-hole: the picture
+showed the molecule roughly edge-on with the chlorine off to the side. Since the
+fix, `molecular_frame()` returns both vectors and the σ view uses the unprojected
+one. When the tilt exceeds 15°, the console says so.
 
 **For molecules without a halogen** there is no C–X axis, and the script falls
 back to the longest principal axis of the heavy atoms. The three views stay a
@@ -439,6 +453,99 @@ closer to the nucleus where V is higher. For bromobenzene, ρ = 0.00112 gives
 the interpolated density itself smooths the isosurface, so the script warns
 whenever the spacing exceeds 0.30 Bohr. `summary.csv` records which method
 produced each value in the `sigma_method` column.
+
+### Molecules with more than one halogen
+
+Two halogens in the same molecule are usually not equivalent. Triazolam is the
+obvious example: one chlorine sits on the fused benzodiazepine ring, the other
+on the pendant phenyl, and they see completely different electronic
+environments. An earlier version of the script simply took the first halogen in
+the atom list — which halogen that was depended on nothing but the ordering in
+the structure file, and the second one was silently dropped.
+
+Every halogen with a bonded carbon is now evaluated separately: its own C–X
+axis, its own ray cone, its own belt. The console prints one block per halogen,
+sorted by σ-hole strength, and marks the one the σ view looks along:
+
+```
+  Lokal an Br1:   <- Achse der sigma-Ansicht
+    sigma-Loch  = +0.0086 a.u.  =   +5.4 kcal/(mol*e)   [interpoliert, 2.9 Grad zur Achse]
+    Guertel     = -0.0362 a.u.  =  -22.7 kcal/(mol*e)   [224 Punkte]
+  Lokal an Cl4:
+    sigma-Loch  = -0.0040 a.u.  =   -2.5 kcal/(mol*e)   [interpoliert, 2.2 Grad zur Achse]
+    Guertel     = -0.0362 a.u.  =  -22.7 kcal/(mol*e)   [157 Punkte]
+```
+
+The labels are `symbol` + 1-based atom number, so they can be matched against
+the structure file directly. `*_settings.txt` gets one line per halogen and
+records which one defined the view. In `summary.csv`, `sigma_hole_au` remains
+the *strongest* σ-hole so the column stays sortable across a batch;
+`sigma_hole_on` names the atom it belongs to, `n_halogens` how many there are,
+and `sigma_holes_all` lists every one of them as `label:value` pairs, e.g.
+`Br1:0.00862;Cl4:-0.00398`. Nothing is lost. The summary table at the end of a
+batch run appends `Br1 of 2` to make clear the printed value is one of several.
+
+Sanity checks: on *p*-dichlorobenzene, where the two chlorines are related by
+symmetry, both come out at +0.0074 a.u. On 1-bromo-2-chloroethane they differ as
+chemistry demands — Br +5.4, Cl −2.5 kcal/mol, the alkyl chlorine having no
+σ-hole worth the name. Molecules with a single halogen are unaffected: the
+values and the console output are identical to before.
+
+One caveat for small molecules: the belt region is defined relative to its own
+halogen, and if two halogens sit within a few bonds of each other the belts
+overlap, so both report the same minimum — visible above, where both belt values
+are −0.0362. On molecules where the halogens are far apart, as in triazolam, this
+does not arise.
+
+#### The cone must not reach the rest of the molecule
+
+Triazolam exposed a second problem, and this one was not specific to having two
+halogens — it had simply never been triggered by the flat test molecules. The
+ray method walked outward from the halogen and took the **outermost** crossing
+of ρ = 0.001. Triazolam is folded: the cone around the C–Cl21 axis points at the
+methyl group on the triazole ring, roughly 4 Å away. The rays left the chlorine
+surface, crossed vacuum, and struck the methyl — and its surface was reported as
+the σ-hole:
+
+| | before | after |
+|---|---|---|
+| Cl21 σ-hole | +0.0299 a.u. (**+18.8** kcal/mol), 29.0° off axis | +0.0171 a.u. (**+10.7**), 3.8° |
+| Cl21 belt | −0.0670 a.u. (−42.0) — actually the triazole N3/N4 lone pairs | −0.0184 (−11.5) |
+
++18.8 kcal/mol for an aryl chloride was the tell: chlorobenzene gives +4.9, and
+no substituent pattern triples that. The two symptoms in the printed output are
+the **off-axis angle** (29° is nearly the cone edge — a real σ-hole peaks within
+a few degrees of the axis) and the cap radius, which came out at 3.94 Å instead
+of the ~2.0 Å a chlorine surface sits at.
+
+Two changes fix it:
+
+* the ray takes the **first** downward crossing of ρ = 0.001, not the last. The
+  ray starts deep inside the halogen's own density, so the first place it drops
+  through the isovalue is that halogen's own surface, whatever lies beyond.
+* both the ray search and the grid-point cap are cut off at 1.6 × the Bondi van
+  der Waals radius of the halogen. The ρ = 0.001 surface sits at roughly
+  1.1–1.2 vdW radii, so this leaves plenty of room and excludes everything else.
+
+Single-halogen molecules are unaffected — for 4-bromoacetophenone the σ-hole
+moves from +0.02304 to +0.02303 a.u. and the belt is unchanged, because on a
+convex molecule the first and the last crossing are the same point. The rendered
+images are bit-identical; only the numbers changed.
+
+The lesson is worth keeping: **three flat halobenzenes cannot test a method that
+assumes the space beyond the halogen is empty.** A folded drug molecule can. The
+same holds for the σ view: the projection of the C–X axis into the fitted plane
+was harmless on every planar test molecule and wrong on the first non-planar one.
+
+#### The colour scale can hide a correct σ-hole
+
+Worth knowing before concluding an image is broken. With `--esp-range auto` the
+scale is set by the *global* extremes — for triazolam the triazole nitrogens at
+−0.084 a.u. On that scale a σ-hole of +0.017 is 20 % of full blue, i.e. almost
+white, even though the view is aimed correctly. Rendering the same molecule with
+`--esp-range 0.035` makes the cap and its surrounding belt plainly visible. The
+number in the console is the evidence for a σ-hole; the picture at the automatic
+scale is not necessarily.
 
 `--stride 2` is fine for the images and for V<sub>S,min</sub> /
 V<sub>S,max</sub> — those change by about 1 %. For σ-hole values that go into a
@@ -585,7 +692,133 @@ For the halobenzenes the automatic range comes out at **±0.035 a.u.**
 
 ---
 
-## 10. Repository layout
+## 10. Parameter study
+
+Every default in this pipeline was chosen against a measurement, not by taste.
+This section collects those measurements so the choices can be checked, and so
+it is clear which parameters are cosmetic and which change the result.
+
+The short version: **the isovalue is the only parameter that changes the
+physics.** Grid resolution costs accuracy slowly, the colour range and
+transparency change nothing but the picture, and the σ-hole search parameters
+matter only through the two failure modes described in
+[§7](#7-step-3--render-the-standard-image-set).
+
+### 10.1 Isovalue ρ — the one that decides the answer
+
+4-bromoacetophenone, full 114×86×80 grid, everything else at defaults:
+
+| ρ / a.u. | shell points | V<sub>S,min</sub> | V<sub>S,max</sub> | σ-hole | σ-hole kcal/mol | belt |
+|---|---|---|---|---|---|---|
+| 0.0005 | 4901 | −0.0596 | +0.0408 | +0.0159 | 10.0 | −0.0151 |
+| 0.0008 | 4925 | −0.0640 | +0.0463 | +0.0203 | 12.7 | −0.0162 |
+| **0.0010** | **4707** | **−0.0653** | **+0.0476** | **+0.0230** | **14.5** | **−0.0167** |
+| 0.0015 | 4743 | −0.0703 | +0.0539 | +0.0293 | 18.4 | −0.0176 |
+| 0.0020 | 4666 | −0.0730 | +0.0584 | +0.0354 | 22.2 | −0.0179 |
+| 0.0040 | 4490 | −0.0816 | +0.0748 | +0.0568 | 35.7 | −0.0171 |
+
+From 0.0005 to 0.004 the σ-hole grows by a factor of 3.6. That is not noise —
+a larger isovalue means a surface closer to the nuclei, where the positive
+nuclear contribution has been screened less. Every value on such a surface is
+larger in magnitude, on both signs.
+
+The consequence is that **a σ-hole value without its isovalue is meaningless**,
+and two values computed at different isovalues cannot be compared at all. This
+is why 0.001 a.u. is not a tunable here: it is the Bader/Politzer convention
+(see [§1](#1-why-these-images-look-the-way-they-do)) and the only value the rest
+of the literature can be read against. `--iso` exists to reproduce someone
+else's choice, not to improve on this one.
+
+Note that the shell point count barely moves across the whole range. The count
+is therefore no indication that anything changed — a convergence check that
+looks at "enough points" would have passed at every one of these settings.
+
+### 10.2 Grid resolution — `--stride`
+
+Same molecule, isovalue fixed at 0.001, cubes rebuilt from the same pointval
+files at increasing decimation:
+
+| `--stride` | grid | Δ / Bohr | cubes | V<sub>S,min</sub> | V<sub>S,max</sub> | σ-hole | kcal/mol | belt |
+|---|---|---|---|---|---|---|---|---|
+| **1** | 114×86×80 | **0.25** | 20.7 MB | −0.0653 | +0.0476 | **+0.0230** | 14.5 | −0.0167 |
+| 2 | 57×43×40 | 0.50 | 2.6 MB | −0.0636 | +0.0462 | +0.0224 | 14.1 | −0.0166 |
+| 3 | 38×29×27 | 0.75 | 0.8 MB | −0.0638 | +0.0469 | +0.0221 | 13.9 | −0.0159 |
+| 4 | 29×22×20 | 1.00 | 0.3 MB | −0.0634 | +0.0428 | +0.0214 | 13.4 | — |
+
+Cost falls by a factor of 70 across this table; the σ-hole falls by 7 %. The
+degradation is smooth and one-sided — always low, never high — because the
+interpolated density smooths the isosurface. At stride 4 the belt can no longer
+be measured at all: fewer than five surface points survive in the belt region,
+and the script prints a dash rather than a number.
+
+Two things make this table look better than it should. First, these are
+**ray-based** values; the point-based method on the same grids spans a factor of
+five (see the table in [§7](#7-step-3--render-the-standard-image-set)). Second,
+this molecule is small — for the 251³ bromobenzene grids the full-resolution
+cubes are 205 MB and stride 2 is what makes the workflow usable at all.
+
+Practical rule: **stride 2 for looking, stride 1 for numbers that go in a
+table.** The script warns above 0.30 Bohr spacing for exactly this reason.
+
+### 10.3 Colour range — visual only
+
+`--esp-range` never touches a computed value; it only maps numbers to colours.
+It is in this section because getting it wrong makes a correct calculation look
+wrong. Ranges the automatic mode selects:
+
+| molecule | range | set by |
+|---|---|---|
+| halobenzenes | ±0.035 | the halogen belt |
+| 4-bromoacetophenone | ±0.070 | the carbonyl oxygen |
+| triazolam | ±0.085 | the triazole nitrogens |
+| paracetamol | ±0.090 | the phenol oxygen |
+
+A σ-hole of +0.017 is 49 % of full blue at ±0.035 and 20 % at ±0.085 — visible
+in the first case, nearly white in the second, from identical data. Whenever the
+molecule carries a group far more polar than the halogen, the automatic range is
+set by that group and the halogen region is washed out. See
+[§9](#9-choosing-the-colour-scale) for when a common scale is legitimate.
+
+### 10.4 σ-hole search parameters
+
+| parameter | value | why |
+|---|---|---|
+| cone half-angle | 36.9° (`cone_cos = 0.80`) | wide enough that the maximum is found interior to the cone, narrow enough to exclude the belt. A maximum near the edge is a warning sign, not a result — the console prints the off-axis angle for this reason |
+| rays per halogen | 400, Fibonacci spiral | even coverage of the cap without the pole clustering of spherical coordinates |
+| step along a ray | 0.02 Bohr | far below the grid spacing; the crossing radius is then refined by linear interpolation anyway |
+| radius cut-off | 1.6 × Bondi vdW | the ρ = 0.001 surface sits at 1.1–1.2 vdW radii; beyond that the ray is looking at another part of the molecule |
+| belt half-angle | ±69.5° (`belt_cos = 0.35`) | the belt is broad; a narrow band would sample only its rim |
+| belt radius | 1.5 × mean cap radius | keeps the belt on its own halogen — with the caveat for adjacent halogens noted in [§7](#7-step-3--render-the-standard-image-set) |
+
+The first two of these were tuned; the rest follow from the geometry. What
+actually cost the most work was not any of these numbers but the two structural
+mistakes — taking the outermost isosurface crossing, and projecting the C–X axis
+into the fitted plane — both of which are documented where they arose.
+
+### 10.5 Rendering
+
+| parameter | value | note |
+|---|---|---|
+| `transparency` | 0.15 | enough to see the stick model through the surface, little enough that the colour still reads. Purely a visual judgement; no number depends on it |
+| `transparency_mode` | 2 | PyMOL's back-face-aware mode; without it the far side of the surface bleeds through and the colours mix |
+| `surface_quality` | 1 | the isosurface triangulation, not the data |
+| `orthoscopic` | on | no perspective, so two molecules rendered at the same zoom are directly comparable |
+| image size | 2000 × 1600, 300 dpi | large enough for a full-width figure in a report at ~17 cm |
+
+### 10.6 Test-data generator
+
+`tools/CreateTpTdFromSmiles.py` has its own parameters, documented with their
+reasoning in `tools/README.txt`. The one measurement worth repeating here is the
+cost scaling, because it decides what is practical: triazolam (35 atoms, 390
+basis functions) at the default 0.25 Bohr and 3.5 Å margin needs 1.41 million
+grid points and about 26 minutes for the grid evaluation, against roughly 4
+minutes for 4-bromoacetophenone. The two factors multiply — 1.8× more points and
+4× more work per point. `--spacing 0.30 --margin 2.5` brings that back to about
+10 minutes, at the price of landing at the grid-spacing warning threshold.
+
+---
+
+## 11. Repository layout
 
 ```
 esp_visualization/
@@ -650,7 +883,7 @@ of the scripts elsewhere — that is exactly how two versions drift apart.
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 **`ContourSurfVolume: VTKm not available, falling back to internal implementation`**
 Harmless, and it appears on every run. VTK-m is an optional parallel contouring
@@ -748,7 +981,7 @@ incorrectly. The provided scripts set this already.
 
 ---
 
-## 12. References
+## 13. References
 
 **Method / convention**
 

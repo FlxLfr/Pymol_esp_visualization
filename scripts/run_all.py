@@ -217,8 +217,13 @@ def write_summary(path, rows, common_range=None):
               "shell_points", "VS_min_au", "VS_max_au",
               "VS_min_kcal", "VS_max_kcal", "VS_min_kJ", "VS_max_kJ",
               "VS_max_on", "VS_min_on",
-              "halogen", "sigma_hole_au", "sigma_hole_kcal", "sigma_method",
-              "belt_min_au", "belt_min_kcal",
+              # sigma_hole_* describe the STRONGEST sigma-hole; sigma_hole_on
+              # says which atom that is, and sigma_holes_all lists every
+              # halogen of the molecule (label:value in a.u., ';'-separated)
+              # so nothing is lost for multi-halogen compounds.
+              "halogen", "sigma_hole_on", "sigma_hole_au", "sigma_hole_kcal",
+              "sigma_method", "belt_min_au", "belt_min_kcal",
+              "n_halogens", "sigma_holes_all",
               "esp_range_used_au", "esp_range_mode"]
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=fields)
@@ -239,6 +244,12 @@ def write_summary(path, rows, common_range=None):
                 "VS_max_on": r.get("vmax_atom") or "",
                 "VS_min_on": r.get("vmin_atom") or "",
                 "halogen": r.get("halogen") or "",
+                "sigma_hole_on": r.get("halogen_atom") or "",
+                "n_halogens": r.get("n_halogens", 0),
+                "sigma_holes_all": ";".join(
+                    f"{e['label']}:{e['sigma_max']:.5f}"
+                    for e in r.get("halogens", [])
+                    if e.get("sigma_max") is not None),
                 "sigma_hole_au": ("" if r.get("sigma_max") is None
                                   else f"{r['sigma_max']:.5f}"),
                 "sigma_hole_kcal": ("" if r.get("sigma_max") is None
@@ -393,9 +404,16 @@ def main(argv=None):
         sig = (f"{'-':>12}" if r.get("sigma_max") is None
                else f"{r['sigma_max']:+12.4f}")
         on = (r.get("vmax_atom") or "?")
+        # Bei mehreren Halogenen ist die sigma-Loch-Spalte der GROESSTE Wert.
+        # Damit das nicht so aussieht, als gaebe es nur eines, wird hier
+        # angehaengt, auf welchem Atom er sitzt und wie viele es insgesamt sind.
+        note = ""
+        if r.get("n_halogens", 0) > 1:
+            note = (f"   {ansi.atom_label(r.get('halogen_atom') or '?')}"
+                    f" of {r['n_halogens']}")
         print(f"{r['prefix']:<20}{r['vmin']:>+10.4f}{r['vmax']:>+10.4f}"
               f"{'':>{max(0, 7 - len(on))}}{ansi.atom_label(on)}"
-              f"{sig}{r['esp_range']:>9.4f}")
+              f"{sig}{r['esp_range']:>9.4f}{note}")
     print("-" * 70)
     print(f"Common scale covering all molecules: +/- {common:.4f} a.u.")
     print(f"Summary written to {summary}")
