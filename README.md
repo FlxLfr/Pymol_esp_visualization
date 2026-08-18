@@ -365,11 +365,48 @@ belongs to, and gives the local values in the halogen regions:
 Both values also go into `*_settings.txt` and into the `sigma_hole_au` /
 `belt_min_au` columns of `summary.csv`.
 
-The σ-hole cap is a small patch of the surface, so it needs enough grid points.
-If fewer than 30 land inside it the script says so and the value is too low — on
-the decimated 42³ demo grid the same bromobenzene σ-hole comes out as +0.0034
-instead of +0.0126. `--stride 2` (126³) is fine; do not read a σ-hole off a
-coarser grid.
+In the console the molecule headers are green and halogen symbols are cyan, so
+the relevant lines stand out in a long batch run. Colours switch off
+automatically when the output is redirected to a file or piped, so log files stay
+clean.
+
+To turn them off explicitly, use the flag — it works on both scripts:
+
+```bash
+python run_all.py --root ../sandbox --no-color
+```
+
+The `NO_COLOR` / `FORCE_COLOR` environment variables are honoured as well
+(see [no-color.org](https://no-color.org)). Note that these are *environment
+variables*, not arguments, so they are set before the command rather than
+appended to it:
+
+```powershell
+# PowerShell
+$env:NO_COLOR = 1
+python run_all.py --root ../sandbox
+Remove-Item Env:NO_COLOR
+```
+
+```bash
+# bash
+NO_COLOR=1 python run_all.py --root ../sandbox
+```
+
+The σ-hole cap is a small patch of the surface — roughly 3 % of all shell
+points — so it needs a grid fine enough that those 3 % are still a usable
+number. The count scales with the square of the grid spacing:
+
+| grid | spacing | shell points | in the σ-cap | usable |
+|---|---|---|---|---|
+| 251³ (full) | 0.12 Bohr | many | many | yes |
+| 126³ (`--stride 2`) | 0.24 Bohr | 4704 | 144 | yes |
+| 42³ (demo cubes) | 0.72 Bohr | 195 | 6 | **no** |
+
+Below 30 points in the cap the script warns and the value is systematically too
+low: the same bromobenzene σ-hole reads +0.0126 a.u. on the 126³ grid and only
++0.0034 on the 42³ demo grid. The demo cubes exist to prove the pipeline runs,
+not to produce numbers.
 
 Options worth knowing:
 
@@ -410,8 +447,20 @@ Then:
 
 ```bash
 cd scripts
-python run_all.py --root ../sandbox --stride 2 --two-pass
+python run_all.py --root ../sandbox --two-pass
 ```
+
+Conversion runs at **full grid resolution** by default, matching
+`xyzToCube.py`. Add `--stride 2` for a faster first pass — eight times smaller
+cubes, visually identical images, still ~140 grid points in the σ-hole cap:
+
+```bash
+python run_all.py --root ../sandbox --two-pass --stride 2
+```
+
+`--stride` only matters while cube files are being *created*. If `td.cube` and
+`tp.cube` already exist they are reused unchanged, and the flag does nothing —
+use `--force-convert` to rebuild them.
 
 Called **without arguments**, `run_all.py` runs on `reference/` instead. That is
 the smoke test: it exercises the whole pipeline on data that is known to work, so
@@ -432,9 +481,15 @@ The images will look coarser than the committed ones: the smoke test runs on the
 decimated 42³ demo grids, the reference images were rendered at 126³. The
 *numbers* are what has to match.
 
-This converts what needs converting, renders every molecule, and writes
-`summary.csv` with V<sub>S,min</sub> and V<sub>S,max</sub> for each — in a.u.,
-kcal/(mol·e) and kJ/(mol·e).
+This converts what needs converting, renders every molecule, writes an
+`esp.pml` next to each molecule's cube files so you can open the scene
+interactively, and collects `summary.csv` with V<sub>S,min</sub>,
+V<sub>S,max</sub> and the σ-hole for each — in a.u., kcal/(mol·e) and
+kJ/(mol·e).
+
+The generated `esp.pml` always carries the colour scale that was actually used
+for that molecule's images. After a `--two-pass` run it holds the common scale,
+so what you see interactively matches the figure set.
 
 `--two-pass` first renders every molecule on its own automatic scale, then
 re-renders all of them using the largest range it saw, so the final set is
@@ -476,6 +531,7 @@ esp_visualization/
 │   ├── xyzToCube.py              Turbomole pointval -> Gaussian cube
 │   ├── render_esp.py             standard image set from cube files
 │   ├── run_all.py                batch driver + summary.csv
+│   ├── ansi.py                   console colours (no dependencies)
 │   └── esp.pml                   interactive PyMOL scene
 ├── reference/                    known-good example — output, not input
 │   ├── summary.csv

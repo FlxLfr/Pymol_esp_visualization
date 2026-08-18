@@ -29,16 +29,22 @@ Typical use
 -----------
 First pass, every molecule on its own automatic colour scale::
 
-    python run_all.py --root ../reference --stride 2
+    python run_all.py --root ../sandbox
 
 Second pass, one common scale so the images are directly comparable::
 
-    python run_all.py --root ../reference --stride 2 --esp-range 0.035
+    python run_all.py --root ../sandbox --esp-range 0.035
 
 Or let the script do both in one go -- it runs the automatic pass, takes the
 largest range it saw, and re-renders everything with it::
 
-    python run_all.py --root ../reference --stride 2 --two-pass
+    python run_all.py --root ../sandbox --two-pass
+
+Conversion runs at full grid resolution by default, like xyzToCube.py. For a
+quicker first look, --stride 2 keeps every second point per axis: eight times
+smaller cubes, visually identical images, and still enough grid points in the
+sigma-hole cap. Note that --stride only takes effect while cube files are being
+*created* -- if td.cube and tp.cube already exist they are reused as they are.
 
 ``--two-pass`` is the recommended way to produce a comparable figure set:
 you get the per-molecule maximum contrast images *and* the comparable ones,
@@ -59,6 +65,7 @@ if _HERE not in sys.path:
 
 import xyzToCube                                    # noqa: E402
 import render_esp                                   # noqa: E402
+import ansi                                         # noqa: E402
 
 
 HARTREE_TO_KCAL = 627.5095
@@ -160,6 +167,29 @@ def convert(entry, stride, struct_unit, force=False):
     return out
 
 
+def write_scene(entry, cubes, esp_range, iso, transparency,
+                filename="esp.pml"):
+    """Schreibt ein PyMOL-Skript neben die Cube-Dateien.
+
+    Damit hat jedes Molekuel nicht nur die fertigen Bilder, sondern auch eine
+    interaktive Szene zum Drehen und Nachschauen - mit exakt der Farbskala, die
+    auch fuer die Bilder verwendet wurde. Beim Zwei-Pass-Lauf wird die Datei im
+    zweiten Durchgang mit der gemeinsamen Skala ueberschrieben, sie passt also
+    immer zum zuletzt erzeugten Bildersatz.
+    """
+    folder = entry["dir"]
+    path = os.path.join(folder, filename)
+    xyzToCube.write_pymol_script(
+        path,
+        struct=os.path.basename(entry["struct"]),
+        density_cube=os.path.basename(cubes["td"]),
+        esp_cube=os.path.basename(cubes["tp"]),
+        vmin=-esp_range, vmax=esp_range,
+        iso=iso, transparency=transparency,
+    )
+    return path
+
+
 def render(entry, cubes, esp_range, iso, transparency, backgrounds,
            width, height, dpi, buffer, prefix=None, images_dir="images"):
     folder = entry["dir"]
@@ -237,8 +267,13 @@ def main(argv=None):
     p.add_argument("--root", default=DEFAULT_ROOT,
                    help="directory tree to search for molecule folders "
                         "(default: the repository's reference/ folder)")
-    p.add_argument("--stride", type=int, default=2,
-                   help="grid decimation during conversion (default 2)")
+    p.add_argument("--stride", type=int, default=1,
+                   help="grid decimation during conversion: keep every n-th "
+                        "point per axis (default 1 = full resolution, same as "
+                        "xyzToCube.py). --stride 2 gives 8x smaller cubes and "
+                        "is plenty for images; do not go coarser if you need "
+                        "the sigma-hole value. Ignored when the cube files "
+                        "already exist.")
     p.add_argument("--struct-unit", choices=["angstrom", "bohr"],
                    default="angstrom")
     p.add_argument("--force-convert", action="store_true",
@@ -259,11 +294,19 @@ def main(argv=None):
                    help="name of the output folder inside each molecule "
                         "folder (default: 'images', or 'images_check' when "
                         "running the built-in reference set)")
+    p.add_argument("--no-color", action="store_true",
+                   help="plain output without ANSI colours (same effect as "
+                        "setting the NO_COLOR environment variable)")
     p.add_argument("--summary", default=None,
                    help="path of the CSV summary (default <root>/summary.csv)")
     args = p.parse_args(argv)
 
+    if args.no_color:
+        ansi.disable()
+
     is_reference = os.path.abspath(args.root) == os.path.abspath(DEFAULT_ROOT)
+    # Auch die PyMOL-Szene des Selbsttests darf nichts Committetes ueberschreiben.
+    pml_name = "esp_check.pml" if is_reference else "esp.pml"
     if args.images_dir is None:
         # Der Selbsttest darf die committeten Referenzbilder nicht ueberschreiben.
         args.images_dir = "images_check" if is_reference else "images"
@@ -287,11 +330,15 @@ def main(argv=None):
 
     rows = []
     for e in entries:
-        print(f"\n[{os.path.basename(os.path.normpath(e['dir']))}]")
+        name = os.path.basename(os.path.normpath(e["dir"]))
+        print("\n" + ansi.paint(f"[{name}]", ansi.GREEN + ansi.BOLD))
         cubes = convert(e, args.stride, args.struct_unit, args.force_convert)
         res = render(e, cubes, args.esp_range, args.iso, args.transparency,
                      args.backgrounds, args.width, args.height, args.dpi,
                      args.buffer, images_dir=args.images_dir)
+        pml = write_scene(e, cubes, res["esp_range"], args.iso,
+                          args.transparency, filename=pml_name)
+        print(f"    -> {pml}")
         rows.append(res)
 
     common = max(r["esp_range"] for r in rows)
@@ -301,11 +348,15 @@ def main(argv=None):
               f"+/- {common:.4f} a.u.")
         rows = []
         for e in entries:
-            print(f"\n[{os.path.basename(os.path.normpath(e['dir']))}]")
+            name = os.path.basename(os.path.normpath(e["dir"]))
+            print("\n" + ansi.paint(f"[{name}]", ansi.GREEN + ansi.BOLD))
             cubes = convert(e, args.stride, args.struct_unit, force=False)
             res = render(e, cubes, common, args.iso, args.transparency,
                          args.backgrounds, args.width, args.height, args.dpi,
                          args.buffer, images_dir=args.images_dir)
+            pml = write_scene(e, cubes, common, args.iso, args.transparency,
+                              filename=pml_name)
+            print(f"    -> {pml}")
             rows.append(res)
     elif args.two_pass and len(rows) <= 1:
         print("\n(--two-pass skipped: a single molecule needs no common scale)")
@@ -321,8 +372,10 @@ def main(argv=None):
     for r in rows:
         sig = ("     -" if r.get("sigma_max") is None
                else f"{r['sigma_max']:+12.4f}")
+        on = (r.get("vmax_atom") or "?")
         print(f"{r['prefix']:<20}{r['vmin']:>+10.4f}{r['vmax']:>+10.4f}"
-              f"{(r.get('vmax_atom') or '?'):>7}{sig}{r['esp_range']:>9.4f}")
+              f"{'':>{max(0, 7 - len(on))}}{ansi.atom_label(on)}"
+              f"{sig}{r['esp_range']:>9.4f}")
     print("-" * 70)
     print(f"Common scale covering all molecules: +/- {common:.4f} a.u.")
     print(f"Summary written to {summary}")

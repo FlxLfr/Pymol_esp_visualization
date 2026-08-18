@@ -53,6 +53,8 @@ import sys
 
 import numpy as np
 
+import ansi
+
 
 # ----------------------------------------------------------------------------
 # Cube einlesen (nur fuer die Statistik; PyMOL laedt die Dateien selbst)
@@ -333,10 +335,13 @@ def render_all(args):
                 f"  = {v*627.5095:+6.1f} kcal/(mol*e)")
 
     print(f"  ESP auf der rho={args.iso}-Schale ({npts} Punkte):")
-    print(f"    V_S,min = {_fmt(vmin)}   auf {loc.get('vmin_atom', '?')}")
-    print(f"    V_S,max = {_fmt(vmax)}   auf {loc.get('vmax_atom', '?')}")
+    print(f"    V_S,min = {_fmt(vmin)}   auf "
+          f"{ansi.atom_label(loc.get('vmin_atom', '?'))}")
+    print(f"    V_S,max = {_fmt(vmax)}   auf "
+          f"{ansi.atom_label(loc.get('vmax_atom', '?'))}")
     if "sigma_max" in loc:
-        print(f"  Lokal am Halogen ({loc.get('halogen', '?')}):")
+        print(f"  Lokal am Halogen "
+              f"({ansi.element(loc.get('halogen', '?'))}):")
         print(f"    sigma-Loch  = {_fmt(loc['sigma_max'])}"
               f"   [{loc['sigma_points']} Punkte]")
         if loc.get("sigma_sparse"):
@@ -347,11 +352,12 @@ def render_all(args):
         if "belt_min" in loc:
             print(f"    Guertel     = {_fmt(loc['belt_min'])}"
                   f"   [{loc['belt_points']} Punkte]")
-        if loc.get("vmax_atom", "").rstrip("0123456789") not in (
-                loc.get("halogen"), ""):
-            print(f"    ! V_S,max liegt auf {loc['vmax_atom']}, nicht auf dem "
-                  f"Halogen - fuer den Vergleich von sigma-Loechern")
-            print(f"      den Wert 'sigma-Loch' verwenden, nicht V_S,max.")
+        # Hinweis, dass V_S,max nicht auf dem Halogen liegt: bewusst nicht
+        # ausgegeben. Bei Arylhalogeniden trifft das praktisch immer zu, die
+        # Meldung waere also bei jedem Molekuel identisch und damit wertlos.
+        # Die Information steckt bereits in der Ortsangabe hinter V_S,max
+        # ("auf H5") und im separat ausgewiesenen sigma-Loch. Erklaerung dazu
+        # in der README, Abschnitt "Which number describes the sigma-hole".
     print(f"  Farbskala: +/- {rng:.3f} a.u. ({how})")
     if args.esp_range == "auto":
         print("  ! Fuer den Vergleich mehrerer Molekuele diesen Wert fixieren:")
@@ -557,6 +563,9 @@ def main(argv):
     p.add_argument("--buffer", type=float, default=2.4,
                    help="Rand um das Molekuel in Angstrom")
     args = p.parse_args(argv)
+
+    if args.no_color:
+        ansi.disable()
 
     args.density = args.density or autodetect(["td.cube", "*dens*.cube"])
     args.esp = args.esp or autodetect(["tp.cube", "*esp*.cube", "*pot*.cube"])

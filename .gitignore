@@ -17,6 +17,7 @@ tp.xyz
 # Output of the built-in smoke test (python run_all.py without arguments).
 # It must never overwrite or shadow the committed reference images.
 **/images_check/
+**/esp_check.pml
 reference/summary_check.csv
 
 # Scratch space for experiments and large intermediate files
