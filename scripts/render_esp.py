@@ -643,14 +643,17 @@ def colorbar(path, rng, dpi=300):
     cmap = LinearSegmentedColormap.from_list(
         "esp", ["#d40000", "#ffffff", "#0030d4"])
 
-    fig = plt.figure(figsize=(4.2, 0.75))
-    ax = fig.add_axes([0.06, 0.45, 0.88, 0.30])
+    # Hoehe grosszuegig plus bbox_inches="tight" beim Speichern: sonst wird die
+    # Achsenbeschriftung unten abgeschnitten, was im gerenderten README auffaellt.
+    fig = plt.figure(figsize=(4.2, 0.95))
+    ax = fig.add_axes([0.06, 0.50, 0.88, 0.26])
     cb = ColorbarBase(ax, cmap=cmap, norm=Normalize(-rng, rng),
                       orientation="horizontal")
     cb.set_label("ESP  /  a.u.", fontsize=9)
     cb.set_ticks([-rng, -rng / 2, 0, rng / 2, rng])
     cb.ax.tick_params(labelsize=8)
-    fig.savefig(path, dpi=dpi, transparent=False, facecolor="white")
+    fig.savefig(path, dpi=dpi, transparent=False, facecolor="white",
+                bbox_inches="tight", pad_inches=0.06)
     plt.close(fig)
     return path
 
