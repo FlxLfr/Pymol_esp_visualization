@@ -1,0 +1,34 @@
+# Environment for the test-data generator (tools/CreateTpTdFromSmiles.py).
+#
+# !! LINUX / macOS ONLY. PySCF has no win-64 build on conda-forge and no
+# !! Windows wheels on PyPI. On Windows this file fails with
+# !!     PackagesNotFoundError: ... - pyscf
+# !! Use WSL - see README.txt, section "PLATFORM REQUIREMENT".
+# !! The actual workflow (scripts/) is unaffected and runs on Windows.
+#
+#   conda env create -f tools/environment-testdata.yml
+#   conda activate esp-testdata
+#
+# Contains everything from ../environment.yml plus RDKit and PySCF.
+# Deliberately a SEPARATE environment rather than an extended 'esp':
+#
+#   - RDKit and PySCF together are several hundred MB and have nothing to do
+#     with visualisation. Anyone who only wants images should not have to
+#     install them.
+#   - The 'esp' environment is what the SOP prescribes. The leaner it is, the
+#     less can go wrong when setting it up, and the faster 'conda env create'
+#     finishes for the next person.
+#
+# This environment can do the whole chain: generate test data AND render.
+name: esp-testdata
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  # --- same as in ../environment.yml -------------------------------------
+  - pymol-open-source
+  - numpy
+  - matplotlib
+  # --- additionally for test-data generation -----------------------------
+  - rdkit                # SMILES -> 3D geometry (ETKDG + MMFF94)
+  - pyscf                # SCF calculation, density and potential on the grid

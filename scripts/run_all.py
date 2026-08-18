@@ -267,6 +267,10 @@ def main(argv=None):
     p.add_argument("--root", default=DEFAULT_ROOT,
                    help="directory tree to search for molecule folders "
                         "(default: the repository's reference/ folder)")
+    p.add_argument("--only", nargs="+", metavar="NAME",
+                   help="restrict the run to these molecule folders; simple "
+                        "wildcards are allowed, e.g. --only paracetamol "
+                        "'*benzol'")
     p.add_argument("--stride", type=int, default=1,
                    help="grid decimation during conversion: keep every n-th "
                         "point per axis (default 1 = full resolution, same as "
@@ -322,8 +326,21 @@ def main(argv=None):
               "scale and V_S values must match.")
 
     entries = discover(args.root)
+    if args.only:
+        import fnmatch
+        keep = []
+        for e in entries:
+            base = os.path.basename(os.path.normpath(e["dir"]))
+            if any(fnmatch.fnmatch(base.lower(), pat.lower())
+                   for pat in args.only):
+                keep.append(e)
+        skipped = len(entries) - len(keep)
+        entries = keep
+        if skipped:
+            print(f"  --only: {skipped} folder(s) skipped")
     if not entries:
-        raise SystemExit(f"No molecule folders found below '{args.root}'.")
+        raise SystemExit(f"No molecule folders found below '{args.root}'"
+                         + (" matching --only." if args.only else "."))
     print(f"{len(entries)} molecule folder(s) found:")
     for e in entries:
         print(f"  - {e['dir']}  (structure: {os.path.basename(e['struct'])})")
@@ -370,7 +387,9 @@ def main(argv=None):
           f"{'sigma-hole':>12}{'range':>9}")
     print("-" * 70)
     for r in rows:
-        sig = ("     -" if r.get("sigma_max") is None
+        # Platzhalter in derselben Spaltenbreite wie die Zahl, sonst
+        # verrutscht die Zeile bei Molekuelen ohne Halogen.
+        sig = (f"{'-':>12}" if r.get("sigma_max") is None
                else f"{r['sigma_max']:+12.4f}")
         on = (r.get("vmax_atom") or "?")
         print(f"{r['prefix']:<20}{r['vmin']:>+10.4f}{r['vmax']:>+10.4f}"
