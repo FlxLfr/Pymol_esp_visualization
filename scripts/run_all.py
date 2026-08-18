@@ -217,7 +217,7 @@ def write_summary(path, rows, common_range=None):
               "shell_points", "VS_min_au", "VS_max_au",
               "VS_min_kcal", "VS_max_kcal", "VS_min_kJ", "VS_max_kJ",
               "VS_max_on", "VS_min_on",
-              "halogen", "sigma_hole_au", "sigma_hole_kcal",
+              "halogen", "sigma_hole_au", "sigma_hole_kcal", "sigma_method",
               "belt_min_au", "belt_min_kcal",
               "esp_range_used_au", "esp_range_mode"]
     with open(path, "w", newline="", encoding="utf-8") as fh:
@@ -243,6 +243,7 @@ def write_summary(path, rows, common_range=None):
                                   else f"{r['sigma_max']:.5f}"),
                 "sigma_hole_kcal": ("" if r.get("sigma_max") is None
                                     else f"{r['sigma_max']*HARTREE_TO_KCAL:.2f}"),
+                "sigma_method": r.get("sigma_method") or "",
                 "belt_min_au": ("" if r.get("belt_min") is None
                                 else f"{r['belt_min']:.5f}"),
                 "belt_min_kcal": ("" if r.get("belt_min") is None

@@ -9,10 +9,13 @@
 td.xyz
 tp.xyz
 
-# ...except the decimated demo grids, which are small enough to ship so that a
-# fresh clone can be tested immediately (see README, section 10).
-!**/td_demo.cube
-!**/tp_demo.cube
+# ...except the reference dataset. Those grids are decimated to 0.75 Bohr
+# (~2.3 MB each) and are committed on purpose: they are RAW pointval files, not
+# cubes, so a fresh clone exercises the whole chain including xyzToCube.py -
+# unit conversion and index reordering included. Shipping cubes instead would
+# skip exactly the step most likely to break.
+!reference/**/td.xyz
+!reference/**/tp.xyz
 
 # Output of the built-in smoke test (python run_all.py without arguments).
 # It must never overwrite or shadow the committed reference images.

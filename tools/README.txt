@@ -110,9 +110,11 @@ PARAMETER CHOICES
     by eight. At 0.12 Bohr this would take hours instead of minutes, which is
     pointless for a functional test.
 
-    Lower bound: the sigma-hole cap must contain more than 30 grid points,
-    otherwise render_esp.py warns and the value comes out too low. At
-    0.25 Bohr that is satisfied for molecules of this size.
+    Lower bound: render_esp.py determines the sigma-hole by casting rays and
+    interpolating, not by picking grid points, so it is fairly tolerant of
+    coarse grids. It still warns above 0.30 Bohr spacing, because the
+    interpolated density itself smooths the isosurface and biases the value low
+    by a few percent. 0.25 Bohr stays below that.
 
 --margin 3.5 Angstrom (default)
 
@@ -176,11 +178,10 @@ treated all-electron while iodine used an effective core potential. Worth
 asking the supervisor.
 
 
-
 BUILT-IN TEST CASES
 -------------------
 
-4-bromoacetophenone   CC(=O)c1ccc(Br)cc1 // python CreateTpTdFromSmiles.py --smiles "CC(=O)c1ccc(Br)cc1" --name 4-bromacetophenon
+4-bromoacetophenone   CC(=O)c1ccc(Br)cc1
     Halogen AND carbonyl. The carbonyl oxygen is considerably more negative
     than the bromine belt, so V_S,min has to move onto the oxygen while the
     belt value is still measured at the bromine. This is the first case where
@@ -192,7 +193,7 @@ BUILT-IN TEST CASES
     of bromobenzene (+7.9) and on par with iodobenzene (+15.5) - the acetyl
     group withdraws density from the ring and deepens the hole.
 
-paracetamol           CC(=O)Nc1ccc(O)cc1 // python CreateTpTdFromSmiles.py --smiles "CC(=O)NC1=CC=C(C=C1)O" --name paracetamol
+paracetamol           CC(=O)Nc1ccc(O)cc1
     No halogen. Tests whether the sigma-hole analysis is skipped cleanly and
     whether the orientation falls back to the principal axes instead of
     crashing.

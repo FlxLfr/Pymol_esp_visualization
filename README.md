@@ -14,17 +14,19 @@ onto an electron-density isosurface.
 | Manual steps | none — the whole pipeline is two commands |
 
 <p align="center">
-  <img src="reference/brombenzol/images/brombenzol_pi.png" width="32%" alt="pi face">
-  <img src="reference/brombenzol/images/brombenzol_sigma.png" width="32%" alt="sigma hole">
-  <img src="reference/brombenzol/images/brombenzol_edge.png" width="32%" alt="in-plane profile">
+  <img src="reference/4-bromacetophenon/images/4-bromacetophenon_pi.png" width="32%" alt="pi face">
+  <img src="reference/4-bromacetophenon/images/4-bromacetophenon_sigma.png" width="32%" alt="sigma hole">
+  <img src="reference/4-bromacetophenon/images/4-bromacetophenon_edge.png" width="32%" alt="in-plane profile">
 </p>
 <p align="center">
-  <img src="reference/brombenzol/images/brombenzol_colorbar.png" width="42%" alt="colour scale">
+  <img src="reference/4-bromacetophenon/images/4-bromacetophenon_colorbar.png" width="42%" alt="colour scale">
 </p>
 
-<p align="center"><em>Bromobenzene. Left: π face, negative (red) above the ring.
-Centre: view along the C–Br axis — the blue spot inside the red belt is the
-σ-hole. Right: in-plane profile.</em></p>
+<p align="center"><em>4-Bromoacetophenone. Left: π face, with the carbonyl
+oxygen as the deep red region at the top. Centre: view along the C–Br axis — the
+blue σ-hole cap inside the red belt. Right: in-plane profile. One molecule
+showing both features the workflow has to get right: a strongly negative
+functional group and an anisotropic halogen.</em></p>
 
 ---
 
@@ -61,19 +63,25 @@ of element radii that different programs disagree about.
 negative (electron-rich, attracts electrophiles), blue is positive. The scale is
 symmetric around zero so that white always means "neutral".
 
-For bromobenzene this pair of conventions makes one specific feature visible:
+For a bromoarene this pair of conventions makes one specific feature visible:
 the **σ-hole**. The potential on the bromine is not isotropic — it is *negative*
 in a belt perpendicular to the C–Br bond and *positive* in a cap on the extension
 of that bond. That positive cap is what allows a halogen bond, and no single
 partial charge on the bromine can represent it. The `_sigma` view exists
 specifically to show it.
 
-Measured values for the included example:
+Measured values for the included example, 4-bromoacetophenone:
 
-| quantity | a.u. | kcal/(mol·e) | kJ/(mol·e) |
-|---|---|---|---|
-| V<sub>S,min</sub> (π face / Br belt) | −0.0188 | −11.8 | −49.4 |
-| V<sub>S,max</sub> (σ-hole) | +0.0315 | +19.8 | +82.8 |
+| quantity | on | a.u. | kcal/(mol·e) | kJ/(mol·e) |
+|---|---|---|---|---|
+| V<sub>S,min</sub> | carbonyl O | −0.0653 | −41.0 | −171.5 |
+| V<sub>S,max</sub> | a ring H | +0.0476 | +29.9 | +125.0 |
+| σ-hole | Br, on the C–Br axis | +0.0230 | +14.5 | +60.5 |
+| halogen belt | Br, perpendicular | −0.0167 | −10.5 | −43.9 |
+
+Note that all four are different places on the same surface, and that neither
+global extremum sits on the bromine — see
+[§7](#which-number-describes-the-σ-hole).
 
 ---
 
@@ -254,13 +262,17 @@ Useful options:
 | `--transparency 0` | opaque surface in the generated `esp.pml` |
 | `--outdir DIR` | write the cubes somewhere else |
 
-**On `--stride`.** For bromobenzene, decimating the 251³ grid to 126³ changes
-V<sub>S,min</sub> not at all and V<sub>S,max</sub> by 0.9 % (+19.58 vs.
+**On `--stride`.** For bromobenzene, decimating the 251³ grid to 126³ leaves
+V<sub>S,min</sub> unchanged and shifts V<sub>S,max</sub> by 0.9 % (+19.58 vs.
 +19.80 kcal/(mol·e)). The rendered images are indistinguishable, the files shrink
-from 201 MB to 26 MB and PyMOL becomes noticeably faster. **Recommendation:**
-work with `--stride 2` and only regenerate at full resolution for final figures
-if you want to. Check this convergence once for a new class of system rather than
-assuming it.
+from 201 MB to 26 MB and PyMOL becomes noticeably faster.
+
+**The σ-hole is more sensitive.** It is evaluated by ray casting with
+interpolation rather than read off grid points, which makes it far more robust,
+but a coarse grid still smooths the isosurface and biases the value low by a few
+percent (see [§7](#which-number-describes-the-σ-hole)). So: `--stride 2` while
+you are exploring and for the images, full resolution whenever a σ-hole value
+goes into a table.
 
 What the converter takes care of, which is where hand-rolled conversions usually
 go wrong:
@@ -323,10 +335,16 @@ PyMOL's `orient`:
 | `*_edge.png` | in the molecular plane | overall profile |
 
 The plane normal comes from the principal axes of the heavy atoms; the second
-axis is the carbon–halogen bond (or, if there is no halogen, the longest
-principal axis). Every molecule therefore lands in the same orientation
-automatically — that is what makes the set comparable, and it is why no manual
-rotation is needed or wanted.
+axis is the carbon–halogen bond. Every molecule therefore lands in the same
+orientation automatically — that is what makes the set comparable, and it is why
+no manual rotation is needed or wanted.
+
+**For molecules without a halogen** there is no C–X axis, and the script falls
+back to the longest principal axis of the heavy atoms. The three views stay a
+proper orthogonal triple, but `*_sigma.png` then looks down the long axis of the
+molecule rather than at a σ-hole — for paracetamol, for instance, from the
+phenol end through the ring towards the acetamido group. The file name is kept
+for consistency across an image set; read it as "axial view" in that case.
 
 Alongside the images:
 
@@ -340,16 +358,18 @@ Alongside the images:
 sits on the *ring hydrogens*, not on the halogen. Compare bromobenzene and
 iodobenzene:
 
-| | bromobenzene | iodobenzene |
-|---|---|---|
-| **σ-hole** (cap on the C–X axis) | **+0.0126** a.u. (+7.9 kcal/mol) | **+0.0246** a.u. (+15.5 kcal/mol) |
-| ring hydrogens = global V<sub>S,max</sub> | +0.0312 a.u. (+19.6) | +0.0311 a.u. (+19.5) |
-| halogen belt = global V<sub>S,min</sub> | −0.0188 a.u. (−11.8) | −0.0167 a.u. (−10.5) |
+All values below from the full 251³ grid:
 
-The two global maxima are identical to three decimals — because both are the same
+| | chlorobenzene | bromobenzene | iodobenzene |
+|---|---|---|---|
+| **σ-hole** (cap on the C–X axis) | **+0.0078** a.u. (+4.9 kcal/mol) | **+0.0162** a.u. (+10.2) | **+0.0255** a.u. (+16.0) |
+| ring hydrogens = global V<sub>S,max</sub> | +0.0313 a.u. (+19.6) | +0.0315 a.u. (+19.8) | +0.0317 a.u. (+19.9) |
+| halogen belt = global V<sub>S,min</sub> | −0.0190 a.u. (−11.9) | −0.0188 a.u. (−11.8) | −0.0169 a.u. (−10.6) |
+
+The three global maxima agree to within 0.4 % — because all three are the same
 aromatic C–H. Use them to compare halogen-bond donors and you conclude that
-bromine and iodine have equally strong σ-holes, which is wrong: the σ-holes
-differ by nearly a factor of two, in the expected direction.
+chlorine, bromine and iodine have equally strong σ-holes, which is wrong: the
+σ-holes span a factor of 3.3, in the expected order Cl < Br < I.
 
 `render_esp.py` therefore reports both. It names the atom the global extremum
 belongs to, and gives the local values in the halogen regions:
@@ -393,20 +413,36 @@ Remove-Item Env:NO_COLOR
 NO_COLOR=1 python run_all.py --root ../sandbox
 ```
 
-The σ-hole cap is a small patch of the surface — roughly 3 % of all shell
-points — so it needs a grid fine enough that those 3 % are still a usable
-number. The count scales with the square of the grid spacing:
+**The σ-hole is not read off grid points.** It is a peak *on* the C–X axis,
+and whether a grid point happens to sit both on that axis and inside the thin
+ρ = 0.001 shell is luck. On a decimated bromobenzene grid the best cap point
+was 1.14 Bohr off the axis, which measured the flank instead of the summit.
 
-| grid | spacing | shell points | in the σ-cap | usable |
-|---|---|---|---|---|
-| 251³ (full) | 0.12 Bohr | many | many | yes |
-| 126³ (`--stride 2`) | 0.24 Bohr | 4704 | 144 | yes |
-| 42³ (demo cubes) | 0.72 Bohr | 195 | 6 | **no** |
+The script therefore casts rays from the halogen into a cone around the axis,
+locates where ρ crosses the isovalue along each ray by interpolation, and
+evaluates V there — both trilinearly interpolated. That removes the dependence
+on grid alignment:
 
-Below 30 points in the cap the script warns and the value is systematically too
-low: the same bromobenzene σ-hole reads +0.0126 a.u. on the 126³ grid and only
-+0.0034 on the 42³ demo grid. The demo cubes exist to prove the pipeline runs,
-not to produce numbers.
+| grid | spacing | point-based | **ray-based (used)** |
+|---|---|---|---|
+| 42³ | 0.72 Bohr | +2.1 kcal/mol | **+9.4** |
+| 126³ (`--stride 2`) | 0.24 Bohr | +7.9 | **+10.1** |
+| 251³ (full) | 0.12 Bohr | +11.0 | **+10.2** |
+
+Measured on bromobenzene. The point-based value spans a factor of five across
+these grids; the ray-based one varies by 8 %. The two also differ on the *same*
+grid, and not by accident: the point-based method takes the best grid point
+within a shell of |ρ − 0.001| < 0.00012, and the inner edge of that shell sits
+closer to the nucleus where V is higher. For bromobenzene, ρ = 0.00112 gives
++10.9 kcal/mol and ρ = 0.00088 gives +9.3 — the ray method evaluates at exactly
+0.00100 and returns +10.2. A residual underestimate remains on very coarse grids because
+the interpolated density itself smooths the isosurface, so the script warns
+whenever the spacing exceeds 0.30 Bohr. `summary.csv` records which method
+produced each value in the `sigma_method` column.
+
+`--stride 2` is fine for the images and for V<sub>S,min</sub> /
+V<sub>S,max</sub> — those change by about 1 %. For σ-hole values that go into a
+table, use the full grid.
 
 Options worth knowing:
 
@@ -491,15 +527,23 @@ files.
 python run_all.py
 ```
 
-It writes to `reference/*/images_check/` and `reference/summary_check.csv`, never
-to the committed `images/` — so you can compare your output against the reference
-side by side. Both are git-ignored. Your run should reproduce
-V<sub>S,min</sub> = −0.0188 and V<sub>S,max</sub> = +0.0312 a.u. and a colour
-range of ±0.035 a.u.
+It converts `td.xyz`/`tp.xyz` to cube files, renders, and writes to
+`reference/*/images_check/` and `reference/summary_check.csv` — never to the
+committed `images/`, so you can compare side by side. Everything it produces is
+git-ignored. Your run should reproduce, for 4-bromoacetophenone:
 
-The images will look coarser than the committed ones: the smoke test runs on the
-decimated 42³ demo grids, the reference images were rendered at 126³. The
-*numbers* are what has to match.
+| | expected |
+|---|---|
+| V<sub>S,min</sub> | −0.0638 a.u. on O3 |
+| V<sub>S,max</sub> | +0.0469 a.u. on H14 |
+| σ-hole | +0.0221 a.u. |
+| colour range | ±0.065 a.u. |
+
+The images will look coarser than the committed ones, and the numbers differ
+slightly from those in [§1](#1-why-these-images-look-the-way-they-do): the smoke
+test runs on the decimated 0.75 Bohr grid, the reference images were rendered at
+0.25 Bohr. The script says so itself, warning that 0.75 Bohr is too coarse for a
+σ-hole value.
 
 This converts what needs converting, renders every molecule, writes an
 `esp.pml` next to each molecule's cube files so you can open the scene
@@ -535,8 +579,9 @@ Whatever you choose, **state the range in the figure caption** and ship
 `*_colorbar.png` with the figures. An ESP figure without its scale is
 uninterpretable.
 
-For the bromobenzene example the automatic range is **±0.035 a.u.**
-(±92 kJ/(mol·e)), stable across both grid resolutions.
+For the halobenzenes the automatic range comes out at **±0.035 a.u.**
+(±92 kJ/(mol·e)), stable across grid resolutions; 4-bromoacetophenone needs
+±0.070 because of the carbonyl oxygen.
 
 ---
 
@@ -555,12 +600,11 @@ esp_visualization/
 │   └── esp.pml                   interactive PyMOL scene
 ├── reference/                    known-good example — output, not input
 │   ├── summary.csv
-│   └── brombenzol/
-│       ├── brombenzol_aro_opti.mol
-│       ├── td_demo.cube          decimated (42³) so it fits in the repo
-│       ├── tp_demo.cube
-│       ├── images/               reference images (rendered at 126³)
-│       └── brombenzol_settings.txt
+│   └── 4-bromacetophenon/
+│       ├── 4-bromacetophenon.mol
+│       ├── td.xyz                raw pointval grids, decimated to 0.75 Bohr
+│       ├── tp.xyz
+│       └── images/               reference images (rendered at 114×86×80)
 ├── docs/                         exported PDF of this SOP
 └── sandbox/                      your own data and experiments, not tracked
 ```
@@ -578,20 +622,27 @@ and the Turbomole `td.xyz`/`tp.xyz` grids — a full-resolution cube is 201 MB a
 GitHub rejects anything above 100 MB. Regenerate them from the raw data with
 `xyzToCube.py`.
 
-The two `*_demo.cube` files are an exception: decimated to 42³ (~1 MB each) so
-that a fresh clone can be tested immediately:
+**The reference dataset is an exception, and it ships as raw `pointval` files,
+not as cubes.** That is deliberate: a smoke test that starts from ready-made
+cube files would skip `xyzToCube.py` — the unit conversion and the index
+reordering — which is exactly the step most likely to break. Starting from
+`td.xyz`/`tp.xyz` exercises the entire chain.
+
+They are decimated to 0.75 Bohr (~2.3 MB each instead of 61 MB, and the original
+Turbomole grids are 1.25 GB). The code path does not care about the grid size,
+so a coarse grid tests it just as well.
 
 ```bash
 cd scripts
-python render_esp.py --density ../reference/brombenzol/td_demo.cube \
-                     --esp ../reference/brombenzol/tp_demo.cube \
-                     --struct ../reference/brombenzol/brombenzol_aro_opti.mol \
-                     --prefix demo --outdir /tmp/demo
+python run_all.py            # converts, renders, writes summary_check.csv
 ```
 
-The images in `reference/brombenzol/images/` were rendered from the finer 126³
-grid, so they are smoother than what the demo cubes produce. Both give the same
-±0.035 a.u. colour range.
+The images in `reference/4-bromacetophenon/images/` were rendered from the full
+114×86×80 grid, so they are smoother than what the decimated grid produces, and
+the values differ slightly: the reference grid gives V<sub>S,min</sub> = −0.0638
+and a σ-hole of +0.0221 against −0.0653 and +0.0230 at full resolution. Use it to
+confirm the pipeline runs, not to read numbers off — the script says as much,
+warning that 0.75 Bohr is too coarse for a σ-hole value.
 
 Use `sandbox/` for experiments and large data; it is ignored by git, so the
 scripts in `scripts/` stay the single source of truth. Do not keep a second copy

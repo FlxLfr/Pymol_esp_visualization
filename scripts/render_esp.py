@@ -173,6 +173,14 @@ def local_extrema(pos, vals, atoms,
     if cap.sum() >= 5:
         out["sigma_max"] = float(vals[cap].max())
         out["sigma_points"] = int(cap.sum())
+        # Wie weit sitzt der gefundene Maximalpunkt von der C-X-Achse entfernt?
+        # Das sigma-Loch ist ein Gipfel AUF der Achse; wird die vom Gitter nicht
+        # getroffen, misst man die Flanke und unterschaetzt den Wert. Die reine
+        # Punktzahl in der Kappe reicht als Kriterium nicht aus: bei Brombenzol
+        # lagen 144 Punkte in der Kappe, der beste davon aber 1.14 Bohr neben
+        # der Achse - Ergebnis +0.0126 statt +0.0175 auf dem feinen Gitter.
+        j = int(np.argmax(np.where(cap, vals, -np.inf)))
+        out["sigma_offaxis"] = float(r[j] * np.sqrt(max(0.0, 1 - cos[j] ** 2)))
         # Die sigma-Kappe ist ein kleiner Ausschnitt der Oberflaeche. Auf einem
         # groben Gitter liegen dort nur wenige Punkte, und das lokale Maximum
         # wird dann systematisch unterschaetzt.
@@ -185,6 +193,116 @@ def local_extrema(pos, vals, atoms,
 
     out["halogen"] = HALOGENS[int(znums[hi])]
     return out
+
+
+
+def _trilinear(vol, origin, delta, pts):
+    """Trilineare Interpolation auf einem achsparallelen, regelmaessigen Gitter."""
+    f = (pts - origin) / delta
+    i0 = np.floor(f).astype(int)
+    frac = f - i0
+    n = np.array(vol.shape)
+    i0 = np.clip(i0, 0, n - 2)
+    frac = np.clip(f - i0, 0.0, 1.0)
+
+    out = np.zeros(len(pts))
+    for dx in (0, 1):
+        for dy in (0, 1):
+            for dz in (0, 1):
+                w = ((frac[:, 0] if dx else 1 - frac[:, 0]) *
+                     (frac[:, 1] if dy else 1 - frac[:, 1]) *
+                     (frac[:, 2] if dz else 1 - frac[:, 2]))
+                out += w * vol[i0[:, 0] + dx, i0[:, 1] + dy, i0[:, 2] + dz]
+    return out
+
+
+def _cone_directions(axis, cone_cos, n=400):
+    """Gleichmaessig verteilte Richtungen in einer Kappe um ``axis``.
+
+    Fibonacci-Spirale auf der Kugelkappe - liefert eine gleichmaessige Belegung
+    ohne Haeufung an der Achse, wie sie bei Kugelkoordinaten auftraete.
+    """
+    k = np.arange(n) + 0.5
+    cosv = 1.0 - (1.0 - cone_cos) * k / n          # cone_cos .. 1
+    phi = np.pi * (1 + 5 ** 0.5) * k
+    sinv = np.sqrt(np.maximum(0.0, 1 - cosv ** 2))
+
+    # orthonormale Basis um axis
+    tmp = np.array([1.0, 0.0, 0.0])
+    if abs(np.dot(tmp, axis)) > 0.9:
+        tmp = np.array([0.0, 1.0, 0.0])
+    e1 = np.cross(axis, tmp); e1 /= np.linalg.norm(e1)
+    e2 = np.cross(axis, e1)
+
+    return (cosv[:, None] * axis
+            + (sinv * np.cos(phi))[:, None] * e1
+            + (sinv * np.sin(phi))[:, None] * e2)
+
+
+def sigma_hole_interpolated(density, esp, origin, voxel, atoms, iso=0.001,
+                            cone_cos=0.80, n_rays=400, dr=0.02, r_max=14.0):
+    """sigma-Loch ohne Abhaengigkeit von der Gitterausrichtung.
+
+    Das Problem der punktbasierten Auswertung: das sigma-Loch ist ein Gipfel
+    *auf* der C-X-Achse. Ob ein Gitterpunkt dort UND gleichzeitig innerhalb der
+    duennen rho=iso-Schale liegt, ist Zufall. Bei Brombenzol lag der beste
+    Punkt auf dem 126^3-Gitter 1.14 Bohr neben der Achse - der Wert kam 28 %
+    zu niedrig heraus, obwohl 144 Punkte in der Kappe lagen.
+
+    Stattdessen hier: Strahlen vom Halogen aus in eine Kappe um die Achse, auf
+    jedem Strahl der Radius gesucht, bei dem rho die Isoflaeche schneidet, und
+    dort V ausgewertet - beides trilinear interpoliert. Das Ergebnis haengt
+    nicht mehr davon ab, wo die Gitterpunkte zufaellig liegen.
+
+    Rueckgabe: dict mit sigma_max, belt_min und dem Winkel des Maximums zur
+    Achse; None, wenn kein Halogen vorhanden ist.
+    """
+    diag = np.diag(voxel)
+    if not np.allclose(voxel, np.diag(diag)):
+        return None                       # nicht achsparallel - Fallback
+    delta = diag
+
+    coords = np.array([[a[1], a[2], a[3]] for a in atoms])
+    znums = np.array([a[0] for a in atoms])
+    hal = [i for i, z in enumerate(znums) if z in HALOGENS]
+    carbons = [i for i, z in enumerate(znums) if z == 6]
+    if not hal or not carbons:
+        return None
+
+    hi = hal[0]
+    ci = carbons[int(np.argmin(np.linalg.norm(coords[carbons] - coords[hi],
+                                              axis=1)))]
+    axis = coords[hi] - coords[ci]
+    axis = axis / np.linalg.norm(axis)
+
+    dirs = _cone_directions(axis, cone_cos, n_rays)
+    radii = np.arange(1.0, r_max, dr)
+
+    best_v, best_cos = None, None
+    for d in dirs:
+        pts = coords[hi] + radii[:, None] * d[None, :]
+        rho = _trilinear(density, origin, delta, pts)
+        # aeusserster Schnittpunkt: von aussen nach innen der erste Wert >= iso
+        idx = np.nonzero(rho >= iso)[0]
+        if idx.size == 0:
+            continue
+        j = idx[-1]
+        if j + 1 >= len(radii):
+            continue
+        # lineare Interpolation des Radius am Isowert
+        r0, r1 = radii[j], radii[j + 1]
+        y0, y1 = rho[j], rho[j + 1]
+        rs = r0 + (iso - y0) * (r1 - r0) / (y1 - y0) if y1 != y0 else r0
+        v = float(_trilinear(esp, origin, delta,
+                             (coords[hi] + rs * d)[None, :])[0])
+        if best_v is None or v > best_v:
+            best_v, best_cos = v, float(np.dot(d, axis))
+
+    if best_v is None:
+        return None
+    return {"sigma_max": best_v,
+            "sigma_angle": float(np.degrees(np.arccos(min(1.0, best_cos)))),
+            "sigma_method": "interpoliert"}
 
 
 def nice_range(vmin, vmax, step=0.005):
@@ -330,6 +448,15 @@ def render_all(args):
     pos, vals = shell_points(dens, esp, origin, voxel, iso=args.iso)
     loc = local_extrema(pos, vals, atoms)
 
+    # Das sigma-Loch wird bevorzugt ueber Strahlen mit Interpolation bestimmt.
+    # Die punktbasierte Variante haengt davon ab, ob zufaellig ein Gitterpunkt
+    # nahe der C-X-Achse UND in der duennen Isoschale liegt; bei Brombenzol
+    # ergibt sie auf demselben Gitter +7.9 statt +10.1 kcal/(mol*e).
+    ray = sigma_hole_interpolated(dens, esp, origin, voxel, atoms, iso=args.iso)
+    if ray:
+        loc.update(ray)
+    spacing = float(np.max(np.abs(np.diag(voxel))))
+
     def _fmt(v):
         return (f"{v:+.4f} a.u.  = {v*2625.4996:+7.1f} kJ/(mol*e)"
                 f"  = {v*627.5095:+6.1f} kcal/(mol*e)")
@@ -342,13 +469,18 @@ def render_all(args):
     if "sigma_max" in loc:
         print(f"  Lokal am Halogen "
               f"({ansi.element(loc.get('halogen', '?'))}):")
-        print(f"    sigma-Loch  = {_fmt(loc['sigma_max'])}"
-              f"   [{loc['sigma_points']} Punkte]")
-        if loc.get("sigma_sparse"):
-            print(f"    ! nur {loc['sigma_points']} Gitterpunkte in der "
-                  f"sigma-Kappe - der Wert ist auf diesem groben Gitter")
-            print(f"      unzuverlaessig und zu niedrig. Feiner rechnen "
-                  f"(kleineres --stride).")
+        tag = loc.get("sigma_method", "punktbasiert")
+        extra = (f"   [{tag}, {loc['sigma_angle']:.1f} Grad zur Achse]"
+                 if "sigma_angle" in loc
+                 else f"   [{tag}, {loc.get('sigma_points', 0)} Punkte]")
+        print(f"    sigma-Loch  = {_fmt(loc['sigma_max'])}{extra}")
+        # Auch das Strahlverfahren kann die Isoflaeche auf einem groben Gitter
+        # nur so genau lokalisieren, wie die Dichte dort aufgeloest ist.
+        if spacing > 0.30:
+            print(f"    ! Gitterabstand {spacing:.2f} Bohr - fuer einen "
+                  f"belastbaren sigma-Loch-Wert zu grob;")
+            print(f"      erwartungsgemaess einige Prozent zu niedrig. "
+                  f"Feiner rechnen (kleineres --stride).")
         if "belt_min" in loc:
             print(f"    Guertel     = {_fmt(loc['belt_min'])}"
                   f"   [{loc['belt_points']} Punkte]")
@@ -459,11 +591,11 @@ def render_all(args):
                  f"({vmax*627.5095:+.2f} kcal/(mol*e))  auf "
                  f"{loc.get('vmax_atom','?')}\n")
         if "sigma_max" in loc:
-            warn = "  ! zu wenige Gitterpunkte" if loc.get("sigma_sparse") else ""
             fh.write(f"sigma-Loch ({loc.get('halogen','?'):<2})   : "
                      f"{loc['sigma_max']:+.5f} a.u. "
                      f"({loc['sigma_max']*627.5095:+.2f} kcal/(mol*e))"
-                     f"  [{loc['sigma_points']} Punkte]{warn}\n")
+                     f"  [{loc.get('sigma_method','punktbasiert')}]\n")
+        fh.write(f"Gitterabstand     : {spacing:.4f} Bohr\n")
         if "belt_min" in loc:
             fh.write(f"Halogenguertel    : {loc['belt_min']:+.5f} a.u. "
                      f"({loc['belt_min']*627.5095:+.2f} kcal/(mol*e))\n")
@@ -491,7 +623,8 @@ def render_all(args):
         "halogen": loc.get("halogen"),
         "sigma_max": loc.get("sigma_max"),
         "sigma_points": loc.get("sigma_points"),
-        "sigma_sparse": loc.get("sigma_sparse"),
+        "sigma_method": loc.get("sigma_method", "punktbasiert"),
+        "sigma_angle": loc.get("sigma_angle"),
         "belt_min": loc.get("belt_min"),
         "files": written,
         "settings_file": settings,
@@ -562,6 +695,9 @@ def main(argv):
     p.add_argument("--dpi", type=int, default=300)
     p.add_argument("--buffer", type=float, default=2.4,
                    help="Rand um das Molekuel in Angstrom")
+    p.add_argument("--no-color", action="store_true",
+                   help="plain output without ANSI colours (same effect as "
+                        "setting the NO_COLOR environment variable)")
     args = p.parse_args(argv)
 
     if args.no_color:
