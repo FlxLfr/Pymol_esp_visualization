@@ -31,7 +31,6 @@ GREEN = "\033[32m"
 CYAN = "\033[36m"
 YELLOW = "\033[33m"
 
-
 def _enable_windows_vt() -> bool:
     """Schaltet die ANSI-Verarbeitung der Windows-Konsole frei."""
     try:
@@ -48,7 +47,6 @@ def _enable_windows_vt() -> bool:
     except Exception:
         return False
 
-
 def _supported() -> bool:
     if os.environ.get("NO_COLOR"):
         return False
@@ -60,15 +58,12 @@ def _supported() -> bool:
         return _enable_windows_vt()
     return True
 
-
 ENABLED = _supported()
-
 
 def disable():
     """Schaltet die Farbausgabe zur Laufzeit ab (fuer --no-color)."""
     global ENABLED
     ENABLED = False
-
 
 def paint(text, code) -> str:
     """Faerbt ``text``, oder gibt ihn unveraendert zurueck."""
@@ -76,22 +71,17 @@ def paint(text, code) -> str:
         return text
     return f"{code}{text}{RESET}"
 
-
 def green(text):
     return paint(text, GREEN)
-
 
 def cyan(text):
     return paint(text, CYAN)
 
-
 def yellow(text):
     return paint(text, YELLOW)
 
-
 def bold(text):
     return paint(text, BOLD)
-
 
 # ----------------------------------------------------------------------------
 # Chemie-spezifisch
@@ -100,7 +90,6 @@ def bold(text):
 HALOGEN_SYMBOLS = ("F", "Cl", "Br", "I", "At")
 
 _LABEL = re.compile(r"^([A-Za-z]+)(\d*)$")
-
 
 def atom_label(label: str) -> str:
     """Faerbt das Elementsymbol eines Atomlabels, wenn es ein Halogen ist.
@@ -118,7 +107,6 @@ def atom_label(label: str) -> str:
     if symbol in HALOGEN_SYMBOLS:
         return cyan(symbol) + number
     return label
-
 
 def element(symbol: str) -> str:
     """Faerbt ein blankes Elementsymbol, wenn es ein Halogen ist."""

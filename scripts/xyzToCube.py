@@ -42,14 +42,14 @@ Benutzung
 ---------
 Typischer Aufruf fuer das Brombenzol-Beispiel::
 
-    python xyzToCube.py --struct brombenzol_aro_opti.xyz td.xyz tp.xyz --pymol
+    python xyzToCube.py --struct brombenzol_aro_opti.mol td.xyz tp.xyz --pymol
 
-Ergebnis: ``td.cube``, ``tp.cube`` und ``esp.pml`` (fertiges PyMOL-Skript).
+Ergebnis: ``td.cube``, ``tp.cube`` und ``esp.pml`` (fertiges PyMOL-Skript durch --pymol getriggert).
 
 Wenn PyMOL mit dem vollen 251^3-Gitter zu langsam wird, jeden zweiten Punkt
 verwenden::
 
-    python xyzToCube.py --struct brombenzol_aro_opti.xyz td.xyz tp.xyz --stride 2
+    python xyzToCube.py --struct brombenzol_aro_opti.mol td.xyz tp.xyz --stride 2
 
 Als Strukturdatei werden ``.xyz``, ``.mol``, ``.sdf`` und ``.pdb`` akzeptiert -
 dieselben Formate wie in render_esp.py. Empfehlung: beiden Skripten *dieselbe*
@@ -74,8 +74,8 @@ import numpy as np
 # Konstanten
 # ----------------------------------------------------------------------------
 
-BOHR_PER_ANGSTROM = 1.8897259886          # CODATA
-ANGSTROM_PER_BOHR = 1.0 / BOHR_PER_ANGSTROM
+from constants import (BOHR_PER_ANGSTROM, ANGSTROM_PER_BOHR,  # noqa: F401
+                       HARTREE_TO_KJ)
 
 # Ordnungszahlen fuer die gaengigen Elemente. Erweitern falls noetig.
 ELEMENTS = [
@@ -147,9 +147,6 @@ def _read_molfile(lines, path):
         Zeile 4   Zaehlzeile:  " 12 12  0 ... V2000"
         dann      je Atom:  x  y  z  Symbol  ...      <- Koordinaten ZUERST
         dann      Bindungsblock
-
-    Achtung: die Spaltenreihenfolge ist genau umgekehrt zu xyz. Genau daran
-    scheiterte diese Funktion frueher mit "Unbekanntes Element 0.0000".
 
     Bei SD-Files wird nur der erste Datensatz gelesen (bis ``$$$$``).
     Molfile-Koordinaten sind per Definition in Angstrom.
@@ -548,7 +545,7 @@ def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
         iso=iso,
         transparency=transparency,
         vmin=vmin, vmax=vmax,
-        kvmin=vmin * 2625.4996, kvmax=vmax * 2625.4996,
+        kvmin=vmin * HARTREE_TO_KJ, kvmax=vmax * HARTREE_TO_KJ,
     )
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(text)
@@ -564,7 +561,7 @@ def main(argv=None):
                     "nach Gaussian-Cube konvertieren.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Beispiel:\n"
-               "  python xyzToCube.py --struct brombenzol_aro_opti.xyz "
+               "  python xyzToCube.py --struct brombenzol_aro_opti.mol "
                "td.xyz tp.xyz --pymol\n",
     )
     p.add_argument("grids", nargs="+",

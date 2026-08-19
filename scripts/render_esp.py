@@ -54,6 +54,7 @@ import sys
 import numpy as np
 
 import ansi
+from constants import BOHR_PER_ANGSTROM, HARTREE_TO_KCAL, HARTREE_TO_KJ
 
 
 # ----------------------------------------------------------------------------
@@ -124,11 +125,7 @@ def shell_points(density, esp, origin, voxel, iso=0.001, tol_factor=0.12):
 def halogen_axes(atoms):
     """Alle Halogene mit ihrer C-X-Achse.
 
-    Ein Molekuel kann mehr als ein Halogen tragen - Triazolam etwa hat zwei
-    Chloratome in voellig verschiedener elektronischer Umgebung. Frueher nahm
-    der Code stillschweigend ``hal[0]``, also das erste Halogen in der
-    Atomliste; welches das ist, haengt allein an der Reihenfolge im Strukturfile.
-    Ausgewertet wird jetzt jedes einzeln.
+    Ein Molekuel kann mehr als ein Halogen tragen - Jedes wird einzeln ausgewertet.
 
     Rueckgabe: Liste von dicts mit
       index   0-basierter Atomindex des Halogens
@@ -187,7 +184,6 @@ def local_extrema(pos, vals, atoms,
     Regionen:
       sigma   Kappe um die verlaengerte C-X-Achse (Oeffnungswinkel aus cone_cos)
       belt    Guertel senkrecht dazu, in Halogennaehe
-      hydro   Umgebung der Wasserstoffatome
 
     Rueckgabe: dict mit den Kennwerten in atomaren Einheiten; die
     halogenbezogenen Eintraege fehlen, wenn das Molekuel kein Halogen enthaelt.
@@ -219,19 +215,6 @@ def local_extrema(pos, vals, atoms,
         if cap.sum() >= 5:
             e["sigma_max"] = float(vals[cap].max())
             e["sigma_points"] = int(cap.sum())
-            # Wie weit sitzt der gefundene Maximalpunkt von der C-X-Achse
-            # entfernt? Das sigma-Loch ist ein Gipfel AUF der Achse; wird die
-            # vom Gitter nicht getroffen, misst man die Flanke und
-            # unterschaetzt den Wert. Die reine Punktzahl in der Kappe reicht
-            # als Kriterium nicht aus: bei Brombenzol lagen 144 Punkte in der
-            # Kappe, der beste davon aber 1.14 Bohr neben der Achse -
-            # Ergebnis +0.0126 statt +0.0175 auf dem feinen Gitter.
-            j = int(np.argmax(np.where(cap, vals, -np.inf)))
-            e["sigma_offaxis"] = float(r[j] * np.sqrt(max(0.0, 1 - cos[j] ** 2)))
-            # Die sigma-Kappe ist ein kleiner Ausschnitt der Oberflaeche. Auf
-            # einem groben Gitter liegen dort nur wenige Punkte, und das lokale
-            # Maximum wird dann systematisch unterschaetzt.
-            e["sigma_sparse"] = bool(cap.sum() < 30)
             r_cap = float(r[cap].mean())
             belt = (np.abs(cos) < belt_cos) & (r < belt_factor * r_cap)
             if belt.sum() >= 5:
@@ -271,7 +254,7 @@ def promote_primary(out):
     out["halogen"] = first["symbol"]
     out["halogen_atom"] = first["label"]
     out["halogen_index"] = first["index"]
-    for k in ("sigma_max", "sigma_points", "sigma_offaxis", "sigma_sparse",
+    for k in ("sigma_max", "sigma_points",
               "sigma_angle", "sigma_method", "belt_min", "belt_points"):
         if k in first:
             out[k] = first[k]
@@ -403,7 +386,6 @@ def nice_range(vmin, vmax, step=0.005):
 # ----------------------------------------------------------------------------
 
 HALOGENS = {9: "F", 17: "Cl", 35: "Br", 53: "I"}
-BOHR_PER_ANGSTROM = 1.8897259886
 
 # van-der-Waals-Radien nach Bondi (J. Phys. Chem. 1964, 68, 441), Angstrom.
 # Nur als Groessenordnung fuer die Abstandsgrenze der sigma-Loch-Suche.
@@ -569,8 +551,8 @@ def render_all(args):
     spacing = float(np.max(np.abs(np.diag(voxel))))
 
     def _fmt(v):
-        return (f"{v:+.4f} a.u.  = {v*2625.4996:+7.1f} kJ/(mol*e)"
-                f"  = {v*627.5095:+6.1f} kcal/(mol*e)")
+        return (f"{v:+.4f} a.u.  = {v*HARTREE_TO_KJ:+7.1f} kJ/(mol*e)"
+                f"  = {v*HARTREE_TO_KCAL:+6.1f} kcal/(mol*e)")
 
     print(f"  ESP auf der rho={args.iso}-Schale ({npts} Punkte):")
     print(f"    V_S,min = {_fmt(vmin)}   auf "
@@ -721,10 +703,10 @@ def render_all(args):
                  f"x {dens.shape[2]}\n")
         fh.write(f"Isowert rho       : {args.iso} a.u.\n")
         fh.write(f"V_S,min           : {vmin:+.5f} a.u. "
-                 f"({vmin*627.5095:+.2f} kcal/(mol*e))  auf "
+                 f"({vmin*HARTREE_TO_KCAL:+.2f} kcal/(mol*e))  auf "
                  f"{loc.get('vmin_atom','?')}\n")
         fh.write(f"V_S,max           : {vmax:+.5f} a.u. "
-                 f"({vmax*627.5095:+.2f} kcal/(mol*e))  auf "
+                 f"({vmax*HARTREE_TO_KCAL:+.2f} kcal/(mol*e))  auf "
                  f"{loc.get('vmax_atom','?')}\n")
         # Eine Zeile pro Halogen, absteigend nach sigma-Loch sortiert.
         for e in hals:
@@ -735,12 +717,12 @@ def render_all(args):
                 continue
             fh.write(f"sigma-Loch {tag:<7}: "
                      f"{e['sigma_max']:+.5f} a.u. "
-                     f"({e['sigma_max']*627.5095:+.2f} kcal/(mol*e))"
+                     f"({e['sigma_max']*HARTREE_TO_KCAL:+.2f} kcal/(mol*e))"
                      f"  [{e.get('sigma_method','punktbasiert')}]\n")
             if "belt_min" in e:
                 fh.write(f"Guertel    {tag:<7}: "
                          f"{e['belt_min']:+.5f} a.u. "
-                         f"({e['belt_min']*627.5095:+.2f} kcal/(mol*e))\n")
+                         f"({e['belt_min']*HARTREE_TO_KCAL:+.2f} kcal/(mol*e))\n")
         if len(hals) > 1:
             fh.write(f"sigma-Ansicht auf : {hals[0]['label']} "
                      f"(staerkstes sigma-Loch)\n")

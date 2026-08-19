@@ -45,7 +45,14 @@ import time
 
 import numpy as np
 
-BOHR_PER_ANGSTROM = 1.8897259886
+# Denselben Umrechnungsfaktor benutzen wie die Pipeline in scripts/. Waeren es
+# zwei Werte, saessen die Atome des erzeugten .mol minimal anders als das
+# erzeugte Gitter - unsichtbar im Bild, falsch in den Zahlen. scripts/constants
+# hat bewusst keine Abhaengigkeiten, laesst sich also auch aus der separaten
+# esp-testdata-Umgebung importieren.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                os.pardir, "scripts"))
+from constants import BOHR_PER_ANGSTROM  # noqa: E402
 
 # Eingebaute Testfaelle. Bewusst so gewaehlt, dass sie die Luecken abdecken,
 # die drei fast identische Halogenbenzole offenlassen.

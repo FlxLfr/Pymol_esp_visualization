@@ -66,10 +66,7 @@ if _HERE not in sys.path:
 import xyzToCube                                    # noqa: E402
 import render_esp                                   # noqa: E402
 import ansi                                         # noqa: E402
-
-
-HARTREE_TO_KCAL = 627.5095
-HARTREE_TO_KJ = 2625.4996
+from constants import HARTREE_TO_KCAL, HARTREE_TO_KJ  # noqa: E402
 
 STRUCT_EXT = (".mol", ".sdf", ".pdb", ".xyz")
 GRID_NAMES = ("td", "tp")

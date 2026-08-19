@@ -33,19 +33,18 @@ functional group and an anisotropic halogen.</em></p>
 ## Contents
 
 1. [Why these images look the way they do](#1-why-these-images-look-the-way-they-do)
-2. [Software: what was evaluated and what was chosen](#2-software-what-was-evaluated-and-what-was-chosen)
-3. [Installation](#3-installation)
-4. [Input files and formats](#4-input-files-and-formats)
-5. [Step 1 — Convert the grids to cube](#5-step-1--convert-the-grids-to-cube)
-6. [Step 2 — Look at it interactively](#6-step-2--look-at-it-interactively)
-7. [Step 3 — Render the standard image set](#7-step-3--render-the-standard-image-set)
-8. [Step 4 — Several molecules at once](#8-step-4--several-molecules-at-once)
-9. [Choosing the colour scale](#9-choosing-the-colour-scale)
-10. [Parameter study](#10-parameter-study)
-11. [Results](#11-results)
-12. [Repository layout](#12-repository-layout)
-13. [Troubleshooting](#13-troubleshooting)
-14. [References](#14-references)
+2. [Installation](#2-installation)
+3. [Input files and formats](#3-input-files-and-formats)
+4. [Step 1 — Convert the grids to cube](#4-step-1--convert-the-grids-to-cube)
+5. [Step 2 — Look at it interactively](#5-step-2--look-at-it-interactively)
+6. [Step 3 — Render the standard image set](#6-step-3--render-the-standard-image-set)
+7. [Step 4 — Several molecules at once](#7-step-4--several-molecules-at-once)
+8. [Choosing the colour scale](#8-choosing-the-colour-scale)
+9. [Parameter study](#9-parameter-study)
+10. [Results](#10-results)
+11. [Repository layout](#11-repository-layout)
+12. [Troubleshooting](#12-troubleshooting)
+13. [References](#13-references)
 
 ---
 
@@ -83,43 +82,13 @@ Measured values for the included example, 4-bromoacetophenone:
 
 Note that all four are different places on the same surface, and that neither
 global extremum sits on the bromine — see
-[§7](#which-number-describes-the-σ-hole).
+[§6](#which-number-describes-the-σ-hole).
 
 ---
 
-## 2. Software: what was evaluated and what was chosen
+## 2. Installation
 
-| Program | Reads cube | Surface + ESP mapping | Colour scale control | Scriptable | Licence |
-|---|---|---|---|---|---|
-| **PyMOL (open source)** | yes | `isosurface` + `ramp_new` | full, arbitrary ramps | **Python API + `.pml`** | free, open source |
-| VMD | yes | Isosurface + Colorvolume | full | Tcl / Python | free, academic |
-| UCSF ChimeraX | yes | `surface` + `color electrostatic` | full | command scripts + Python | free, non-commercial |
-| Avogadro 2 | yes | yes | limited | limited | free, open source |
-| GaussView | yes | yes | limited | **no** | commercial |
-| Chemcraft | yes | yes | moderate | **no** | commercial |
-| Multiwfn | (generates them) | quantitative analysis | n/a | shell scripting | free |
-
-**PyMOL was chosen** because it is the only candidate that combines all four
-requirements of this project: it reads Gaussian cube directly, it maps one volume
-onto an isosurface of another, its entire state is reachable from Python — so the
-figure settings live in a file under version control rather than in a sequence of
-mouse clicks — and it is free and open source, so the SOP can specify the exact
-installation as one command instead of a licence request.
-
-GaussView and Chemcraft were ruled out on the automation criterion alone: neither
-can be driven from a script, so neither can guarantee that two molecules were
-rendered with identical settings.
-
-**Multiwfn** is worth adding to the toolchain later if quantitative surface
-descriptors are needed (V<sub>S,min</sub>/V<sub>S,max</sub> statistics, surface
-areas, σ-hole magnitudes). This workflow already reports V<sub>S,min</sub> and
-V<sub>S,max</sub>, but Multiwfn goes considerably further.
-
----
-
-## 3. Installation
-
-### 3.1 Prerequisite: a working conda
+### 2.1 Prerequisite: a working conda
 
 This workflow needs a **functioning conda installation**. That sounds trivial
 and is the single most likely thing to cost you an afternoon, so it is spelled
@@ -143,7 +112,7 @@ conda-forge channel that this workflow uses, and is small. During installation:
 > discover it and remember it as "the" conda of the system. You then get
 > `conda.exe is not a valid application for this operating system platform` on
 > every activation, no matter which interpreter you select. See
-> [Troubleshooting](#13-troubleshooting) for how to get out of that.
+> [Troubleshooting](#12-troubleshooting) for how to get out of that.
 
 Verify that conda works *before* going further:
 
@@ -160,7 +129,7 @@ conda init powershell
 
 then close and reopen every shell.
 
-### 3.2 Create the environment
+### 2.2 Create the environment
 
 Keeping it separate from `base` means it can be recreated exactly and nothing
 else on the machine is disturbed.
@@ -177,7 +146,7 @@ conda create -n esp -c conda-forge python=3.12 pymol-open-source numpy matplotli
 conda activate esp
 ```
 
-### 3.3 Verify
+### 2.3 Verify
 
 ```bash
 python -c "import pymol, numpy, matplotlib; print('ok')"
@@ -186,11 +155,11 @@ python -c "import sys; print(sys.executable)"
 
 The second line must point *inside* the `esp` environment. If it points at a
 system Python instead, the environment was not activated — see
-[Troubleshooting](#13-troubleshooting).
+[Troubleshooting](#12-troubleshooting).
 
 ---
 
-## 4. Input files and formats
+## 3. Input files and formats
 
 Per molecule, in one folder:
 
@@ -241,7 +210,7 @@ removes the failure mode entirely.
 
 ---
 
-## 5. Step 1 — Convert the grids to cube
+## 4. Step 1 — Convert the grids to cube
 
 ```bash
 cd scripts
@@ -272,7 +241,7 @@ from 201 MB to 26 MB and PyMOL becomes noticeably faster.
 **The σ-hole is more sensitive.** It is evaluated by ray casting with
 interpolation rather than read off grid points, which makes it far more robust,
 but a coarse grid still smooths the isosurface and biases the value low by a few
-percent (see [§7](#which-number-describes-the-σ-hole)). So: `--stride 2` while
+percent (see [§6](#which-number-describes-the-σ-hole)). So: `--stride 2` while
 you are exploring and for the images, full resolution whenever a σ-hole value
 goes into a table.
 
@@ -286,7 +255,7 @@ go wrong:
 
 ---
 
-## 6. Step 2 — Look at it interactively
+## 5. Step 2 — Look at it interactively
 
 Before rendering anything, check that structure and grids actually line up:
 
@@ -316,7 +285,7 @@ disable espramp     # hide the colour bar
 
 ---
 
-## 7. Step 3 — Render the standard image set
+## 6. Step 3 — Render the standard image set
 
 ```bash
 cd scripts
@@ -556,7 +525,7 @@ Options worth knowing:
 
 | Option | Default | Effect |
 |---|---|---|
-| `--esp-range` | `auto` | `auto` or a fixed value in a.u. — see [§9](#9-choosing-the-colour-scale) |
+| `--esp-range` | `auto` | `auto` or a fixed value in a.u. — see [§8](#8-choosing-the-colour-scale) |
 | `--transparency` | `0.15` | `0` = opaque, strongest colours; above ~0.3 the profile views become unreadable |
 | `--backgrounds white black` | `white` | render each view on both backgrounds |
 | `--views pi sigma` | all three | subset of views |
@@ -575,7 +544,7 @@ pymol -ckq render_esp.py -- --prefix molecule
 
 ---
 
-## 8. Step 4 — Several molecules at once
+## 7. Step 4 — Several molecules at once
 
 Put each molecule in its own folder under a common root — for your own data that
 is `sandbox/`, which git ignores:
@@ -669,7 +638,7 @@ directly comparable. That is the recommended mode for a figure set.
 
 ---
 
-## 9. Choosing the colour scale
+## 8. Choosing the colour scale
 
 This is the one decision that cannot be automated away, because it depends on
 what the figure is for.
@@ -693,7 +662,7 @@ For the halobenzenes the automatic range comes out at **±0.035 a.u.**
 
 ---
 
-## 10. Parameter study
+## 9. Parameter study
 
 Every default in this pipeline was chosen against a measurement, not by taste.
 This section collects those measurements so the choices can be checked, and so
@@ -703,9 +672,9 @@ The short version: **the isovalue is the only parameter that changes the
 physics.** Grid resolution costs accuracy slowly, the colour range and
 transparency change nothing but the picture, and the σ-hole search parameters
 matter only through the two failure modes described in
-[§7](#7-step-3--render-the-standard-image-set).
+[§6](#6-step-3--render-the-standard-image-set).
 
-### 10.1 Isovalue ρ — the one that decides the answer
+### 9.1 Isovalue ρ — the one that decides the answer
 
 4-bromoacetophenone, full 114×86×80 grid, everything else at defaults:
 
@@ -734,7 +703,7 @@ Note that the shell point count barely moves across the whole range. The count
 is therefore no indication that anything changed — a convergence check that
 looks at "enough points" would have passed at every one of these settings.
 
-### 10.2 Grid resolution — `--stride`
+### 9.2 Grid resolution — `--stride`
 
 Same molecule, isovalue fixed at 0.001, cubes rebuilt from the same pointval
 files at increasing decimation:
@@ -754,14 +723,14 @@ and the script prints a dash rather than a number.
 
 Two things make this table look better than it should. First, these are
 **ray-based** values; the point-based method on the same grids spans a factor of
-five (see the table in [§7](#7-step-3--render-the-standard-image-set)). Second,
+five (see the table in [§6](#6-step-3--render-the-standard-image-set)). Second,
 this molecule is small — for the 251³ bromobenzene grids the full-resolution
 cubes are 205 MB and stride 2 is what makes the workflow usable at all.
 
 Practical rule: **stride 2 for looking, stride 1 for numbers that go in a
 table.** The script warns above 0.30 Bohr spacing for exactly this reason.
 
-### 10.3 Colour range — visual only
+### 9.3 Colour range — visual only
 
 `--esp-range` never touches a computed value; it only maps numbers to colours.
 It is in this section because getting it wrong makes a correct calculation look
@@ -778,9 +747,9 @@ A σ-hole of +0.017 is 49 % of full blue at ±0.035 and 20 % at ±0.085 — visi
 in the first case, nearly white in the second, from identical data. Whenever the
 molecule carries a group far more polar than the halogen, the automatic range is
 set by that group and the halogen region is washed out. See
-[§9](#9-choosing-the-colour-scale) for when a common scale is legitimate.
+[§8](#8-choosing-the-colour-scale) for when a common scale is legitimate.
 
-### 10.4 σ-hole search parameters
+### 9.4 σ-hole search parameters
 
 | parameter | value | why |
 |---|---|---|
@@ -789,14 +758,14 @@ set by that group and the halogen region is washed out. See
 | step along a ray | 0.02 Bohr | far below the grid spacing; the crossing radius is then refined by linear interpolation anyway |
 | radius cut-off | 1.6 × Bondi vdW | the ρ = 0.001 surface sits at 1.1–1.2 vdW radii; beyond that the ray is looking at another part of the molecule |
 | belt half-angle | ±69.5° (`belt_cos = 0.35`) | the belt is broad; a narrow band would sample only its rim |
-| belt radius | 1.5 × mean cap radius | keeps the belt on its own halogen — with the caveat for adjacent halogens noted in [§7](#7-step-3--render-the-standard-image-set) |
+| belt radius | 1.5 × mean cap radius | keeps the belt on its own halogen — with the caveat for adjacent halogens noted in [§6](#6-step-3--render-the-standard-image-set) |
 
 The first two of these were tuned; the rest follow from the geometry. What
 actually cost the most work was not any of these numbers but the two structural
 mistakes — taking the outermost isosurface crossing, and projecting the C–X axis
 into the fitted plane — both of which are documented where they arose.
 
-### 10.5 Rendering
+### 9.5 Rendering
 
 | parameter | value | note |
 |---|---|---|
@@ -806,7 +775,7 @@ into the fitted plane — both of which are documented where they arose.
 | `orthoscopic` | on | no perspective, so two molecules rendered at the same zoom are directly comparable |
 | image size | 2000 × 1600, 300 dpi | large enough for a full-width figure in a report at ~17 cm |
 
-### 10.6 Test-data generator
+### 9.6 Test-data generator
 
 `tools/CreateTpTdFromSmiles.py` has its own parameters, documented with their
 reasoning in `tools/README.txt`. The one measurement worth repeating here is the
@@ -819,7 +788,7 @@ minutes for 4-bromoacetophenone. The two factors multiply — 1.8× more points 
 
 ---
 
-## 11. Results
+## 10. Results
 
 `results/` holds the image sets that this project actually delivers — seven
 molecules, each with the three standard views, its colour bar and its
@@ -838,7 +807,7 @@ results/
 └── halcion/              triazolam           ┘
 ```
 
-### 11.1 Surface ESP values
+### 10.1 Surface ESP values
 
 All at ρ = 0.001 a.u.; σ-hole and belt from the ray method. Atom labels are
 1-based indices into the respective structure file.
@@ -859,7 +828,7 @@ What the set is meant to show:
 * **The halobenzene series** is the trend Cl < Br < I, a factor of 3.3 across
   the three — while their global V<sub>S,max</sub> agree to within 0.4 %,
   because that maximum is the same aromatic C–H in all three. This is the
-  central argument of [§7](#which-number-describes-the-σ-hole).
+  central argument of [§6](#which-number-describes-the-σ-hole).
 * **Chloromethane** is the negative control: an *alkyl* chloride has no σ-hole
   at all. The value on the C–Cl axis is −5.2 kcal/mol — still negative. The
   σ-hole is a property of the C–X bond's electronic environment, not of the
@@ -874,7 +843,7 @@ What the set is meant to show:
   despite being the same element: +10.7 on the pendant 2′-phenyl chlorine
   against +9.0 on the fused-ring one.
 
-### 11.2 What these numbers may and may not be compared with
+### 10.2 What these numbers may and may not be compared with
 
 **The first three rows and the last four are not comparable with each other.**
 Chlorobenzene, bromobenzene and iodobenzene come from the provided Turbomole
@@ -896,14 +865,14 @@ alone.
 Two further caveats:
 
 * **Chloromethane's grid is 0.40 Bohr**, above the 0.30 Bohr threshold at which
-  the script warns. Per §10.2 that biases the value low by a few percent. It does not affect the conclusion — the sign is
+  the script warns. Per §9.2 that biases the value low by a few percent. It does not affect the conclusion — the sign is
   what matters here, and −5.2 is nowhere near zero.
 * The maximum density value in the provided data suggests **bromine was treated
   all-electron while iodine used an effective core potential**. That is a
   question for the supervisor; if so, the Br/I step in the table is not a pure
   basis-set-consistent comparison.
 
-### 11.3 Provenance of the images
+### 10.3 Provenance of the images
 
 > **Note.** `chlorbenzol/`, `chlormethan/` and `iodbenzol/` were rendered with an
 > earlier version of `render_esp.py` — their `*_settings.txt` still uses the
@@ -921,7 +890,7 @@ Two further caveats:
 
 ---
 
-## 12. Repository layout
+## 11. Repository layout
 
 ```
 esp_visualization/
@@ -999,7 +968,7 @@ of the scripts elsewhere — that is exactly how two versions drift apart.
 
 ---
 
-## 13. Troubleshooting
+## 12. Troubleshooting
 
 **`ContourSurfVolume: VTKm not available, falling back to internal implementation`**
 Harmless, and it appears on every run. VTK-m is an optional parallel contouring
@@ -1097,7 +1066,7 @@ incorrectly. The provided scripts set this already.
 
 ---
 
-## 14. References
+## 13. References
 
 **Method / convention**
 
@@ -1112,20 +1081,13 @@ incorrectly. The provided scripts set this already.
 
 * PyMOL — The PyMOL Molecular Graphics System, Schrödinger, LLC.
   Open-source build: <https://github.com/schrodinger/pymol-open-source>
-* W. Humphrey, A. Dalke, K. Schulten, *VMD — Visual Molecular Dynamics*,
-  J. Mol. Graph. **14** (1996) 33–38. [doi:10.1016/0263-7855(96)00018-5](https://doi.org/10.1016/0263-7855(96)00018-5)
-* E. C. Meng et al., *UCSF ChimeraX: Tools for structure building and analysis*,
-  Protein Sci. **32** (2023) e4792. [doi:10.1002/pro.4792](https://doi.org/10.1002/pro.4792)
-* T. Lu, F. Chen, *Multiwfn: A multifunctional wavefunction analyzer*,
-  J. Comput. Chem. **33** (2012) 580–592. [doi:10.1002/jcc.22885](https://doi.org/10.1002/jcc.22885)
-* T. Lu, *A comprehensive electron wavefunction analysis toolbox for chemists,
-  Multiwfn*, J. Chem. Phys. **161** (2024) 082503. [doi:10.1063/5.0216272](https://doi.org/10.1063/5.0216272)
-* M. D. Hanwell et al., *Avogadro: an advanced semantic chemical editor,
-  visualization, and analysis platform*, J. Cheminform. **4** (2012) 17.
-  [doi:10.1186/1758-2946-4-17](https://doi.org/10.1186/1758-2946-4-17)
-* G. Schaftenaar, J. H. Noordik, *Molden: a pre- and post-processing program for
-  molecular and electronic structures*, J. Comput.-Aided Mol. Des. **14** (2000)
-  123–134. [doi:10.1023/A:1008193805436](https://doi.org/10.1023/A:1008193805436)
+
+The comparison of the candidate visualization programs, the criteria they were
+assessed against and the reasoning behind choosing PyMOL are not part of this
+SOP — someone following these instructions needs to know *how* to run the
+workflow, not which alternatives were weighed. They are documented separately in
+**`Software_Evaluation_ESP_Visualization.docx`** in the project folder, together
+with the references for VMD, ChimeraX, Avogadro, Multiwfn and Molden.
 
 ---
 
