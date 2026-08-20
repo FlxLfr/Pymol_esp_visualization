@@ -491,7 +491,7 @@ util.cnc mol
 
 # 4) Farbrampe fuer das ESP; Werte in Hartree/e (a.u.)
 #    {vmin} .. {vmax} a.u.  entspricht {kvmin:.0f} .. {kvmax:.0f} kJ/(mol*e)
-ramp_new espramp, esp, [{vmin}, 0.0, {vmax}], [red, white, blue]
+ramp_new espramp, esp, [{ramp_levels}], [{ramp_colors}]
 
 # 5) ESP auf die Oberflaeche mappen
 set surface_color, espramp, {surface_target}
@@ -520,8 +520,17 @@ zoom mol, 2.0
 """
 
 
+# Farbrampen - identisch zu render_esp.RAMP_PYMOL. Rot bleibt in beiden
+# negativ, blau positiv; der Regenbogen schiebt nur Gelb/Gruen/Cyan dazwischen,
+# damit sich die zwei Bildersaetze nebeneinanderlegen lassen.
+PML_RAMPS = {
+    "redblue": ["red", "white", "blue"],
+    "rainbow": ["red", "yellow", "green", "cyan", "blue"],
+}
+
+
 def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
-                       iso=0.001, transparency=0.15):
+                       iso=0.001, transparency=0.15, rainbow=False):
     if density_cube:
         load_density = f"load {density_cube}, dens"
         isosurface = f"isosurface surf, dens, {iso}"
@@ -535,6 +544,8 @@ def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
                       "set surface_solvent, 0")
         surface_target = "mol"
 
+    cols = PML_RAMPS["rainbow" if rainbow else "redblue"]
+
     # 1 Hartree/e = 2625.5 kJ/(mol*e)
     text = PML_TEMPLATE.format(
         struct=struct,
@@ -546,6 +557,10 @@ def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
         transparency=transparency,
         vmin=vmin, vmax=vmax,
         kvmin=vmin * HARTREE_TO_KJ, kvmax=vmax * HARTREE_TO_KJ,
+        ramp_levels=", ".join(
+            f"{vmin + (vmax - vmin) * i / (len(cols) - 1):g}"
+            for i in range(len(cols))),
+        ramp_colors=", ".join(cols),
     )
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(text)
@@ -586,6 +601,8 @@ def main(argv=None):
     p.add_argument("--transparency", type=float, default=0.15,
                    help="Oberflaechentransparenz im esp.pml, 0..1 "
                         "(Standard: 0.15; 0 = opak)")
+    p.add_argument("--rainbow", action="store_true",
+                   help="Regenbogenrampe im esp.pml statt rot-weiss-blau")
     p.add_argument("--quiet", "-q", action="store_true")
     args = p.parse_args(argv)
 
@@ -651,7 +668,7 @@ def main(argv=None):
                               if "density" in written else None),
                 esp_cube=os.path.basename(esp_cube),
                 vmin=-args.esp_range, vmax=args.esp_range, iso=args.iso,
-                transparency=args.transparency,
+                transparency=args.transparency, rainbow=args.rainbow,
             )
             if verbose:
                 print(f"[3] PyMOL-Skript: {pml}")

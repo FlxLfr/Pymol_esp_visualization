@@ -283,13 +283,27 @@ def _trilinear(vol, origin, delta, pts):
 
 
 def _cone_directions(axis, cone_cos, n=400):
-    """Gleichmaessig verteilte Richtungen in einer Kappe um ``axis``.
+    """Richtungen in einer Kappe um ``axis``; die erste ist die Achse selbst.
 
-    Fibonacci-Spirale auf der Kugelkappe - liefert eine gleichmaessige Belegung
-    ohne Haeufung an der Achse, wie sie bei Kugelkoordinaten auftraete.
+    Der Rest ist eine Fibonacci-Spirale auf der Kugelkappe - gleichmaessige
+    Belegung ohne Haeufung an der Achse, wie sie bei Kugelkoordinaten auftraete.
+
+    Warum die Achse gesondert: das ``+ 0.5`` in ``k`` ist die Mittelpunktsregel
+    fuer FLAECHENGLEICHE Verteilung - jeder Strahl sitzt in der Mitte eines
+    gleich grossen Rings. Das ist richtig, wenn man ueber die Kappe mittelt.
+    Wir suchen aber ein MAXIMUM, und das sitzt beim sigma-Loch genau auf der
+    Achse. Mit dem Versatz war der innerste Strahl 1.281 Grad davon entfernt,
+    die Achse selbst wurde nie ausgewertet, und jedes achsensymmetrische
+    Molekuel meldete stur "1.3 Grad" - eine Untergrenze des Abtastrasters,
+    keine Messung. Der Fehler im Wert war klein (4-Bromacetophenon: 0.008
+    kcal/(mol*e)), die Meldung aber irrefuehrend.
     """
-    k = np.arange(n) + 0.5
-    cosv = 1.0 - (1.0 - cone_cos) * k / n          # cone_cos .. 1
+    axis = np.asarray(axis, dtype=float)
+
+    # n-1 Spiralrichtungen; die Achse kommt als erste dazu
+    m = max(1, n - 1)
+    k = np.arange(m) + 0.5
+    cosv = 1.0 - (1.0 - cone_cos) * k / m          # cone_cos .. 1
     phi = np.pi * (1 + 5 ** 0.5) * k
     sinv = np.sqrt(np.maximum(0.0, 1 - cosv ** 2))
 
@@ -300,9 +314,10 @@ def _cone_directions(axis, cone_cos, n=400):
     e1 = np.cross(axis, tmp); e1 /= np.linalg.norm(e1)
     e2 = np.cross(axis, e1)
 
-    return (cosv[:, None] * axis
-            + (sinv * np.cos(phi))[:, None] * e1
-            + (sinv * np.sin(phi))[:, None] * e2)
+    spiral = (cosv[:, None] * axis
+              + (sinv * np.cos(phi))[:, None] * e1
+              + (sinv * np.sin(phi))[:, None] * e2)
+    return np.vstack([axis[None, :], spiral])
 
 
 def sigma_hole_interpolated(density, esp, origin, voxel, atoms, iso=0.001,
@@ -386,6 +401,44 @@ def nice_range(vmin, vmax, step=0.005):
 # ----------------------------------------------------------------------------
 
 HALOGENS = {9: "F", 17: "Cl", 35: "Br", 53: "I"}
+
+# ----------------------------------------------------------------------------
+# Farbrampen
+#
+# Beide behalten dieselbe Konvention: ROT = negativ, BLAU = positiv, und die
+# Mitte der Skala ist V = 0. Die Regenbogenrampe schiebt nur Gelb/Gruen/Cyan
+# dazwischen, statt ueber Weiss zu gehen. Dadurch bleiben die Bilder beider
+# Rampen an den Enden vergleichbar - waere die Regenbogenskala umgedreht
+# (blau = negativ, wie in manchen Programmen), koennte man die zwei Saetze
+# nicht nebeneinanderlegen.
+#
+# Nutzen der Regenbogenrampe: rot-weiss-blau hat in der Mitte kaum
+# Farbaufloesung, schwach polare Bereiche sehen alle gleich weiss aus. Der
+# Regenbogen loest genau dort auf. Preis: er ist nicht perzeptuell gleichmaessig
+# und erzeugt Kanten, wo keine sind - fuer eine quantitative Aussage bleibt
+# rot-weiss-blau die ehrlichere Darstellung.
+# ----------------------------------------------------------------------------
+
+RAMP_PYMOL = {
+    "redblue": ["red", "white", "blue"],
+    "rainbow": ["red", "yellow", "green", "cyan", "blue"],
+}
+RAMP_HEX = {
+    "redblue": ["#d40000", "#ffffff", "#0030d4"],
+    "rainbow": ["#d40000", "#f0e000", "#00a000", "#00c8d4", "#0030d4"],
+}
+
+
+def ramp_levels(rng, rainbow=False):
+    """Stuetzstellen und Farben fuer ``cmd.ramp_new``.
+
+    Rueckgabe: (levels, colors) - gleich lang, symmetrisch um 0.
+    """
+    name = "rainbow" if rainbow else "redblue"
+    colors = RAMP_PYMOL[name]
+    n = len(colors)
+    levels = [-rng + 2.0 * rng * i / (n - 1) for i in range(n)]
+    return levels, colors
 
 # van-der-Waals-Radien nach Bondi (J. Phys. Chem. 1964, 68, 441), Angstrom.
 # Nur als Groessenordnung fuer die Abstandsgrenze der sigma-Loch-Suche.
@@ -596,7 +649,8 @@ def render_all(args):
         # Die Information steckt bereits in der Ortsangabe hinter V_S,max
         # ("auf H5") und im separat ausgewiesenen sigma-Loch. Erklaerung dazu
         # in der README, Abschnitt "Which number describes the sigma-hole".
-    print(f"  Farbskala: +/- {rng:.3f} a.u. ({how})")
+    print(f"  Farbskala: +/- {rng:.3f} a.u. ({how})"
+          + ("   [Regenbogen]" if args.rainbow else ""))
     if args.esp_range == "auto":
         print("  ! Fuer den Vergleich mehrerer Molekuele diesen Wert fixieren:")
         print(f"      --esp-range {rng:.3f}")
@@ -643,7 +697,8 @@ def render_all(args):
     cmd.util.cnc("mol")
 
     cmd.isosurface("surf", "dens", args.iso)
-    cmd.ramp_new("espramp", "esp", [-rng, 0.0, rng], ["red", "white", "blue"])
+    levels, ramp_colors = ramp_levels(rng, args.rainbow)
+    cmd.ramp_new("espramp", "esp", levels, ramp_colors)
     cmd.set("surface_color", "espramp", "surf")
     cmd.disable("espramp")                 # Balken nicht ins Bild rendern
 
@@ -658,6 +713,9 @@ def render_all(args):
     cmd.set("orthoscopic", 1)              # keine Perspektive -> vergleichbar
 
     outdir = args.outdir or "."
+    # Eigener Namensanhang, sonst ueberschreibt ein Regenbogenlauf den
+    # rot-weiss-blauen Bildersatz desselben Molekuels.
+    cmap_tag = "_rainbow" if args.rainbow else ""
     os.makedirs(outdir, exist_ok=True)
     written = []
 
@@ -674,7 +732,7 @@ def render_all(args):
             cmd.zoom("mol", args.buffer)
 
             suffix = f"_{bg}" if len(args.backgrounds) > 1 else ""
-            png = os.path.join(outdir, f"{args.prefix}_{name}{suffix}.png")
+            png = os.path.join(outdir, f"{args.prefix}{cmap_tag}_{name}{suffix}.png")
             cmd.ray(args.width, args.height)
             cmd.png(png, dpi=args.dpi)
             written.append(png)
@@ -683,8 +741,8 @@ def render_all(args):
     # --- Farbskala als eigenes Bild -------------------------------------
     bar = None
     try:
-        bar = colorbar(os.path.join(outdir, f"{args.prefix}_colorbar.png"),
-                       rng, dpi=args.dpi)
+        bar = colorbar(os.path.join(outdir, f"{args.prefix}{cmap_tag}_colorbar.png"),
+                       rng, dpi=args.dpi, rainbow=args.rainbow)
         written.append(bar)
         print(f"    -> {bar}")
     except ImportError:
@@ -692,7 +750,7 @@ def render_all(args):
               "'conda install matplotlib' zum Aktivieren)")
 
     # --- Protokoll ------------------------------------------------------
-    settings = os.path.join(outdir, f"{args.prefix}_settings.txt")
+    settings = os.path.join(outdir, f"{args.prefix}{cmap_tag}_settings.txt")
     with open(settings, "w", encoding="utf-8") as fh:
         fh.write("Renderparameter (erzeugt von render_esp.py)\n")
         fh.write("=" * 55 + "\n")
@@ -728,6 +786,9 @@ def render_all(args):
                      f"(staerkstes sigma-Loch)\n")
         fh.write(f"Gitterabstand     : {spacing:.4f} Bohr\n")
         fh.write(f"Farbskala         : -{rng:.4f} .. +{rng:.4f} a.u. ({how})\n")
+        ramp_name = ("Regenbogen (rot-gelb-gruen-cyan-blau)" if args.rainbow
+                     else "rot-weiss-blau")
+        fh.write(f"Farbrampe         : {ramp_name}\n")
         fh.write(f"Transparenz       : {args.transparency}\n")
         fh.write(f"Hintergrund       : {', '.join(args.backgrounds)}\n")
         fh.write(f"Bildgroesse       : {args.width} x {args.height} px, "
@@ -746,6 +807,7 @@ def render_all(args):
         "shell_points": npts,
         "esp_range": rng,
         "esp_range_mode": "auto" if args.esp_range == "auto" else "fixed",
+        "colormap": "rainbow" if args.rainbow else "redblue",
         "vmin_atom": loc.get("vmin_atom"),
         "vmax_atom": loc.get("vmax_atom"),
         "halogen": loc.get("halogen"),
@@ -765,7 +827,7 @@ def render_all(args):
     }
 
 
-def colorbar(path, rng, dpi=300):
+def colorbar(path, rng, dpi=300, rainbow=False):
     """Waagerechte Farbskala als separates PNG (braucht matplotlib)."""
     import matplotlib
     matplotlib.use("Agg")
@@ -775,7 +837,7 @@ def colorbar(path, rng, dpi=300):
     from matplotlib.colors import Normalize
 
     cmap = LinearSegmentedColormap.from_list(
-        "esp", ["#d40000", "#ffffff", "#0030d4"])
+        "esp", RAMP_HEX["rainbow" if rainbow else "redblue"])
 
     # Hoehe grosszuegig plus bbox_inches="tight" beim Speichern: sonst wird die
     # Achsenbeschriftung unten abgeschnitten, was im gerenderten README auffaellt.
@@ -832,6 +894,11 @@ def main(argv):
     p.add_argument("--dpi", type=int, default=300)
     p.add_argument("--buffer", type=float, default=2.4,
                    help="Rand um das Molekuel in Angstrom")
+    p.add_argument("--rainbow", action="store_true",
+                   help="Regenbogen-Farbrampe statt rot-weiss-blau. Rot bleibt "
+                        "negativ, blau positiv; Gelb/Gruen/Cyan liegen "
+                        "dazwischen. Schreibt einen eigenen Bildersatz "
+                        "<prefix>_rainbow_*.png")
     p.add_argument("--no-color", action="store_true",
                    help="plain output without ANSI colours (same effect as "
                         "setting the NO_COLOR environment variable)")

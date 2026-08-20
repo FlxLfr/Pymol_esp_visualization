@@ -532,6 +532,7 @@ Options worth knowing:
 | `--width / --height / --dpi` | 2000 / 1600 / 300 | image size |
 | `--iso` | `0.001` | density isovalue |
 | `--buffer` | `2.4` | margin around the molecule, Å |
+| `--rainbow` | off | rainbow ramp instead of red–white–blue — see [§8.1](#81-the-rainbow-ramp) |
 
 **Do not use the PyMOL launcher unless you have to.** `python render_esp.py …`
 loads no `pymolrc`, so nobody's personal start-up file can silently change a
@@ -659,6 +660,55 @@ uninterpretable.
 For the halobenzenes the automatic range comes out at **±0.035 a.u.**
 (±92 kJ/(mol·e)), stable across grid resolutions; 4-bromoacetophenone needs
 ±0.070 because of the carbonyl oxygen.
+
+### 8.1 The rainbow ramp
+
+`--rainbow` switches the colour ramp from red–white–blue to a rainbow. It works
+on all three scripts:
+
+```bash
+python run_all.py --root ../sandbox --rainbow
+python render_esp.py --density td.cube --esp tp.cube --struct x.mol --rainbow
+python xyzToCube.py --struct x.mol td.xyz tp.xyz --pymol --rainbow
+```
+
+| ramp | levels | colours |
+|---|---|---|
+| default | −rng, 0, +rng | red, white, blue |
+| `--rainbow` | −rng, −rng/2, 0, +rng/2, +rng | red, yellow, green, cyan, blue |
+
+**The convention is deliberately not inverted.** Red stays negative and blue
+stays positive in both ramps; the rainbow only inserts yellow, green and cyan in
+between. Some programs run the rainbow the other way round (blue = negative),
+which makes the two image sets impossible to place side by side — the point of
+having the option at all.
+
+**The two sets do not overwrite each other.** A rainbow run writes its own
+files, so the standard set survives:
+
+```
+images/<mol>_pi.png          images/<mol>_rainbow_pi.png
+images/<mol>_colorbar.png    images/<mol>_rainbow_colorbar.png
+images/<mol>_settings.txt    images/<mol>_rainbow_settings.txt
+esp.pml                      esp_rainbow.pml
+```
+
+`*_settings.txt` records the ramp in a `Farbrampe` line, and `summary.csv` has a
+`colormap` column with `redblue` or `rainbow`, so a figure can always be traced
+back to the ramp that produced it.
+
+**When to use which.** Red–white–blue spends almost no colour resolution near
+zero: everything weakly polar comes out white. The rainbow resolves exactly that
+region, which is useful for looking at the π face of an aromatic ring or at a
+saturated backbone.
+
+The price is that a rainbow is not perceptually uniform. The eye reads the
+yellow–green and green–cyan transitions as edges even where the potential
+changes smoothly, and green in the middle looks like a state of its own rather
+than "neutral". For quantitative statements — σ-hole, belt, V<sub>S,min</sub>,
+V<sub>S,max</sub> — red–white–blue is the more honest picture, and it is also
+what the ESP literature uses. Recommended practice: red–white–blue as the main
+figure, rainbow alongside where fine structure is the point.
 
 ---
 

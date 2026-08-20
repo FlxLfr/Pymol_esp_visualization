@@ -165,7 +165,7 @@ def convert(entry, stride, struct_unit, force=False):
 
 
 def write_scene(entry, cubes, esp_range, iso, transparency,
-                filename="esp.pml"):
+                filename="esp.pml", rainbow=False):
     """Schreibt ein PyMOL-Skript neben die Cube-Dateien.
 
     Damit hat jedes Molekuel nicht nur die fertigen Bilder, sondern auch eine
@@ -182,13 +182,14 @@ def write_scene(entry, cubes, esp_range, iso, transparency,
         density_cube=os.path.basename(cubes["td"]),
         esp_cube=os.path.basename(cubes["tp"]),
         vmin=-esp_range, vmax=esp_range,
-        iso=iso, transparency=transparency,
+        iso=iso, transparency=transparency, rainbow=rainbow,
     )
     return path
 
 
 def render(entry, cubes, esp_range, iso, transparency, backgrounds,
-           width, height, dpi, buffer, prefix=None, images_dir="images"):
+           width, height, dpi, buffer, prefix=None, images_dir="images",
+           rainbow=False):
     folder = entry["dir"]
     args = types.SimpleNamespace(
         density=cubes["td"],
@@ -205,6 +206,7 @@ def render(entry, cubes, esp_range, iso, transparency, backgrounds,
         height=height,
         dpi=dpi,
         buffer=buffer,
+        rainbow=rainbow,
     )
     return render_esp.render_all(args)
 
@@ -221,7 +223,7 @@ def write_summary(path, rows, common_range=None):
               "halogen", "sigma_hole_on", "sigma_hole_au", "sigma_hole_kcal",
               "sigma_method", "belt_min_au", "belt_min_kcal",
               "n_halogens", "sigma_holes_all",
-              "esp_range_used_au", "esp_range_mode"]
+              "esp_range_used_au", "esp_range_mode", "colormap"]
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=fields)
         w.writeheader()
@@ -258,6 +260,7 @@ def write_summary(path, rows, common_range=None):
                                   else f"{r['belt_min']*HARTREE_TO_KCAL:.2f}"),
                 "esp_range_used_au": f"{r['esp_range']:.4f}",
                 "esp_range_mode": r["esp_range_mode"],
+                "colormap": r.get("colormap", "redblue"),
             })
         if common_range is not None:
             fh.write(f"# common colour scale covering all molecules: "
@@ -293,6 +296,10 @@ def main(argv=None):
                    help="rewrite cube files even if they already exist")
     p.add_argument("--esp-range", default="auto",
                    help="'auto' (per molecule) or a fixed value in a.u.")
+    p.add_argument("--rainbow", action="store_true",
+                   help="rainbow colour ramp instead of red-white-blue; "
+                        "writes a separate <molecule>_rainbow_* image set "
+                        "and esp_rainbow.pml, so the standard set is kept")
     p.add_argument("--two-pass", action="store_true",
                    help="auto pass first, then re-render everything with the "
                         "largest range found")
@@ -319,7 +326,10 @@ def main(argv=None):
 
     is_reference = os.path.abspath(args.root) == os.path.abspath(DEFAULT_ROOT)
     # Auch die PyMOL-Szene des Selbsttests darf nichts Committetes ueberschreiben.
-    pml_name = "esp_check.pml" if is_reference else "esp.pml"
+    # Eigener Name, sonst ueberschreibt ein Regenbogenlauf die Szene des
+    # rot-weiss-blauen Laufs - die Bilder liegen aus demselben Grund getrennt.
+    _stem = "esp_check" if is_reference else "esp"
+    pml_name = f"{_stem}{'_rainbow' if args.rainbow else ''}.pml"
     if args.images_dir is None:
         # Der Selbsttest darf die committeten Referenzbilder nicht ueberschreiben.
         args.images_dir = "images_check" if is_reference else "images"
@@ -361,9 +371,11 @@ def main(argv=None):
         cubes = convert(e, args.stride, args.struct_unit, args.force_convert)
         res = render(e, cubes, args.esp_range, args.iso, args.transparency,
                      args.backgrounds, args.width, args.height, args.dpi,
-                     args.buffer, images_dir=args.images_dir)
+                     args.buffer, images_dir=args.images_dir,
+                     rainbow=args.rainbow)
         pml = write_scene(e, cubes, res["esp_range"], args.iso,
-                          args.transparency, filename=pml_name)
+                          args.transparency, filename=pml_name,
+                          rainbow=args.rainbow)
         print(f"    -> {pml}")
         rows.append(res)
 
@@ -379,9 +391,10 @@ def main(argv=None):
             cubes = convert(e, args.stride, args.struct_unit, force=False)
             res = render(e, cubes, common, args.iso, args.transparency,
                          args.backgrounds, args.width, args.height, args.dpi,
-                         args.buffer, images_dir=args.images_dir)
+                         args.buffer, images_dir=args.images_dir,
+                         rainbow=args.rainbow)
             pml = write_scene(e, cubes, common, args.iso, args.transparency,
-                              filename=pml_name)
+                              filename=pml_name, rainbow=args.rainbow)
             print(f"    -> {pml}")
             rows.append(res)
     elif args.two_pass and len(rows) <= 1:
