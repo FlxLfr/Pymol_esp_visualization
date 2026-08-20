@@ -900,7 +900,7 @@ def main(argv):
                         "dazwischen. Schreibt einen eigenen Bildersatz "
                         "<prefix>_rainbow_*.png")
     p.add_argument("--no-color", action="store_true",
-                   help="plain output without ANSI colours (same effect as "
+                   help="plain terminal output without ANSI colours (same effect as "
                         "setting the NO_COLOR environment variable)")
     args = p.parse_args(argv)
 
