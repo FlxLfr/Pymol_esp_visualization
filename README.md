@@ -9,7 +9,7 @@ onto an electron-density isosurface.
 | | |
 |---|---|
 | Input | Turbomole `pointval` grids (`td.xyz`, `tp.xyz`) + a structure file |
-| Output | Gaussian cube files, a standard set of PNG images, a CSV of surface ESP statistics |
+| Output | Gaussian cube files, a standard set of PNG images, a CSV of surface ESP statistics & a PyMOL Script to visualize the ESP in Pymol|
 | Software | Python 3 + NumPy + PyMOL (open source), all free |
 | Manual steps | none — the whole pipeline is two commands |
 
@@ -54,9 +54,7 @@ onto an electron-density isosurface.
 
 ### 1.1 Prerequisite: a working conda
 
-This workflow needs a **functioning conda installation**. That sounds trivial
-and is the single most likely thing to cost you an afternoon, so it is spelled
-out here.
+This workflow needs a **functioning conda installation**.
 
 If you have no conda yet, install
 **[Miniforge](https://conda-forge.org/download/)** — it is free, defaults to the
@@ -103,21 +101,12 @@ conda env create -f environment.yml
 conda activate esp
 ```
 
-Or explicitly:
-
-```bash
-conda create -n esp -c conda-forge python=3.12 pymol-open-source numpy matplotlib
-conda activate esp
-```
-
-| Package | Needed for |
+| Packages inside the env | Needed for |
 |---|---|
 | `numpy` | everything — grid handling in all three scripts |
 | `pymol-open-source` | rendering the images and the interactive scene |
-| `matplotlib` | the separate `*_colorbar.png` only; without it the molecule images still render |
+| `matplotlib` | the separate `*_colorbar.png` only |
 
-`tools/CreateTpTdFromSmiles.py` (the test-data generator) needs a **separate**
-environment — see `tools/environment-testdata.yml` and `tools/README.txt`.
 
 ### 1.3 Verify
 
@@ -571,7 +560,13 @@ NO_COLOR=1 python run_all.py --root ../sandbox
 
 ---
 
-## 10. Repository layout
+## 10. Create Tp.xyz, Td.xyz and a structure file from a SMILES notation
+
+In order to create your own files to test the application with your own molecules, a script  is provided within the /tools folder:
+`tools/CreateTpTdFromSmiles.py`
+Running this script needs a seperate environment — see `tools/environment-testdata.yml` and all infos about it can be found in the `tools/README.txt`.
+
+## 11. Repository layout
 
 ```
 esp_visualization/
@@ -632,7 +627,7 @@ versions drift apart.
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 **`ContourSurfVolume: VTKm not available, falling back to internal implementation`**
 Harmless, and it appears on every run. VTK-m is an optional parallel contouring
