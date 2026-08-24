@@ -100,7 +100,6 @@ def read_cube(path):
 def shell_points(density, esp, origin, voxel, iso=0.001,
                  tol_factor=SHELL_TOL_FACTOR):
     """Koordinaten und ESP-Werte der Gitterpunkte auf der rho=iso-Schale.
-
     Nur die Schalenpunkte werden materialisiert, nicht das ganze Gitter -
     bei 251^3 waere ein volles Koordinatenfeld sonst mehrere hundert MB.
     """
@@ -632,7 +631,8 @@ def render_all(args):
         # Meldung waere also bei jedem Molekuel identisch und damit wertlos.
         # Die Information steckt bereits in der Ortsangabe hinter V_S,max
         # ("auf H5") und im separat ausgewiesenen sigma-Loch. Erklaerung dazu
-        # in der README, Abschnitt "Which number describes the sigma-hole".
+        # in docs/ESP_Visualization_Background.docx, Abschnitt 2.1
+        # "Which number describes the sigma-hole - Not V_S,max".
     print(f"  Farbskala: +/- {rng:.3f} a.u. ({how})"
           + ("   [Regenbogen]" if args.rainbow else ""))
     if args.esp_range == "auto":
