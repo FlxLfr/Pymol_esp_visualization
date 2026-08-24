@@ -9,7 +9,7 @@ onto an electron-density isosurface.
 | | |
 |---|---|
 | Input | Turbomole `pointval` grids (`td.xyz`, `tp.xyz`) + a structure file |
-| Output | Gaussian cube files, a standard set of PNG images, a CSV of surface ESP statistics |
+| Output | Gaussian cube files, a standard set of PNG images, a CSV of surface ESP statistics & a PyMOL Script to visualize the ESP in Pymol|
 | Software | Python 3 + NumPy + PyMOL (open source), all free |
 | Manual steps | none — the whole pipeline is two commands |
 
@@ -38,13 +38,13 @@ onto an electron-density isosurface.
 
 1. [Installation](#1-installation)
 2. [Input files and formats](#2-input-files-and-formats)
-3. [Quick start](#3-quick-start)
-4. [Step 1 — Convert the grids to cube (`xyzToCube.py`)](#4-step-1--convert-the-grids-to-cube-xyztocubepy)
-5. [Step 2 — Look at it interactively (`esp.pml`)](#5-step-2--look-at-it-interactively-esppml)
-6. [Step 3 — Render the standard image set (`render_esp.py`)](#6-step-3--render-the-standard-image-set-render_esppy)
-7. [Step 4 — Several molecules at once (`run_all.py`)](#7-step-4--several-molecules-at-once-run_allpy)
-8. [What the workflow writes](#8-what-the-workflow-writes)
-9. [Console output and colours](#9-console-output-and-colours)
+3. [Step 1 — Convert the grids to cube (`xyzToCube.py`)](#3-step-1--convert-the-grids-to-cube-xyztocubepy)
+4. [Step 2 — Look at it interactively (`esp.pml`)](#4-step-2--look-at-it-interactively-esppml)
+5. [Step 3 — Render the standard image set (`render_esp.py`)](#5-step-3--render-the-standard-image-set-render_esppy)
+6. [Step 4 — Several molecules at once (`run_all.py`)](#6-step-4--several-molecules-at-once-run_allpy)
+7. [What the workflow writes](#7-what-the-workflow-writes)
+8. [Console output and colours](#8-console-output-and-colours)
+9. [Create Tp.xyz, Td.xyz and a structure file from a SMILES notation](#9-create-tp.xyz,-td.xyz,-and-a-structure-file-from-a-smiles-notation)
 10. [Repository layout](#10-repository-layout)
 11. [Troubleshooting](#11-troubleshooting)
 
@@ -54,9 +54,7 @@ onto an electron-density isosurface.
 
 ### 1.1 Prerequisite: a working conda
 
-This workflow needs a **functioning conda installation**. That sounds trivial
-and is the single most likely thing to cost you an afternoon, so it is spelled
-out here.
+This workflow needs a **functioning conda installation**.
 
 If you have no conda yet, install
 **[Miniforge](https://conda-forge.org/download/)** — it is free, defaults to the
@@ -103,46 +101,26 @@ conda env create -f environment.yml
 conda activate esp
 ```
 
-Or explicitly:
-
-```bash
-conda create -n esp -c conda-forge python=3.12 pymol-open-source numpy matplotlib
-conda activate esp
-```
-
-| Package | Needed for |
+| Packages inside the env | Needed for |
 |---|---|
 | `numpy` | everything — grid handling in all three scripts |
 | `pymol-open-source` | rendering the images and the interactive scene |
-| `matplotlib` | the separate `*_colorbar.png` only; without it the molecule images still render |
+| `matplotlib` | the separate `*_colorbar.png` only |
 
-`tools/CreateTpTdFromSmiles.py` (the test-data generator) needs a **separate**
-environment — see `tools/environment-testdata.yml` and `tools/README.txt`.
 
-### 1.3 Verify
+### 1.3 Verify & Smoketest
 
 ```bash
 python -c "import pymol, numpy, matplotlib; print('ok')"
-python -c "import sys; print(sys.executable)"
 ```
 
-The second line must point *inside* the `esp` environment. If it points at a
-system Python instead, the environment was not activated — see
-[Troubleshooting](#11-troubleshooting).
-
-Then run the built-in smoke test, which exercises the whole chain on data that
-is known to work:
-
+The smoke test is run with the following command:
 ```bash
 cd scripts
 python run_all.py
 ```
-
-It converts, renders and writes to `reference/*/images_check/` and
-`reference/summary_check.csv` — never to the committed `images/`. Expected for
-4-bromoacetophenone: V<sub>S,min</sub> = −0.0638 a.u. on O3,
-V<sub>S,max</sub> = +0.0469 a.u. on H14, σ-hole = +0.0221 a.u., colour range
-±0.065 a.u. If those come out, the installation is fine.
+Running the (run_all.py) script without parameters results in the script using the `/reference/4-bromacetophenon` directory. It converts, renders and saves the images to: `reference/4-bromacetophenon/images_check/` and concludes a summary in the `reference/summary_check.csv`.
+The summary and images can now be compared with the initial downloaded images and the script. When the results are the same, you can contninue with the visualization of your own molecular files 
 
 ---
 
@@ -177,7 +155,7 @@ Both `xyzToCube.py` and `render_esp.py` accept the same three formats:
 
 | Format | Notes |
 |---|---|
-| `.xyz` | `Symbol x y z`. With or without the leading atom-count and comment lines — a bare coordinate list is accepted. Unit set by `--struct-unit` (default Å). |
+| `.xyz` | `Symbol x y z`. With or without the leading atom-count and comment lines — a bare coordinate list is accepted. Default Å. Can be changed with --struct-unit |
 | `.mol` | MDL molfile, V2000 and V3000. **Coordinates come *before* the element symbol**, the reverse of xyz. Always Å. |
 | `.sdf` | SD-file; only the first record (up to `$$$$`) is read. Always Å. |
 
@@ -196,49 +174,14 @@ removes the failure mode entirely.
 
 ---
 
-## 3. Quick start
-
-Everything is run from `scripts/`, with the `esp` environment active.
-
-**One molecule, from raw grids to images:**
-
-```bash
-cd scripts
-python xyzToCube.py --struct ../sandbox/brombenzol/brombenzol_aro_opti.mol \
-                    ../sandbox/brombenzol/td.xyz ../sandbox/brombenzol/tp.xyz --pymol
-python render_esp.py --density ../sandbox/brombenzol/td.cube \
-                     --esp ../sandbox/brombenzol/tp.cube \
-                     --struct ../sandbox/brombenzol/brombenzol_aro_opti.mol \
-                     --prefix brombenzol --outdir ../sandbox/brombenzol/images
-```
-
-**A whole folder of molecules, in one command** — this is the normal way to use
-the workflow:
-
-```bash
-cd scripts
-python run_all.py --root ../sandbox --two-pass
-```
-
-**Only check that the installation works:**
-
-```bash
-cd scripts
-python run_all.py
-```
-
----
-
-## 4. Step 1 — Convert the grids to cube (`xyzToCube.py`)
+## 3. Step 1 — Convert the grids to cube (`xyzToCube.py`)
 
 ```bash
 cd scripts
 python xyzToCube.py --struct ../path/to/molecule.mol ../path/to/td.xyz ../path/to/tp.xyz --pymol
 ```
 
-Writes `td.cube`, `tp.cube` and — with `--pymol` — a ready-to-use `esp.pml` next
-to the input files. Which grid is density and which is potential is detected from
-the file header, not from the file name.
+Writes `td.cube`, `tp.cube` and with `--pymol` a ready-to-use `esp.pml` PyMOL script is created next to the input files. Which .xyz grid is density and which is potential is detected from the file header, not from the file name.
 
 ### Positional argument
 
@@ -258,12 +201,11 @@ the file header, not from the file name.
 
 ### Options that change only the generated `esp.pml`
 
-They do nothing without `--pymol`, which is why `--help` lists them in their own
-group.
+They do nothing without `--pymol`, which is why `--help` lists them in their own group.
 
 | Option | Default | Effect |
 |---|---|---|
-| `--pymol` | off | write the PyMOL scene at all. |
+| `--pymol` | off | write the PyMOL scene using the resulted .cube files |
 | `--esp-range` | `auto` | half-width of the colour scale in a.u., or `auto` — derived from the ESP on the isosurface, exactly as `render_esp.py` does it. |
 | `--pml-iso` | `0.001` | isovalue **drawn in the scene**. Deliberately named apart from `render_esp.py`'s `--iso`: that one moves the measured numbers, this one only the picture. |
 | `--transparency` | `0.15` | surface transparency, 0…1. `0` = opaque. |
@@ -278,7 +220,7 @@ python xyzToCube.py --struct mol.mol td.xyz tp.xyz --pymol
 # fast pass: 8x smaller cubes, images look identical
 python xyzToCube.py --struct mol.mol td.xyz tp.xyz --stride 2 --pymol
 
-# structure file already in Bohr, cubes into a separate folder
+# structure file already in Bohr, cubes into a separate "out" folder
 python xyzToCube.py --struct mol.xyz --struct-unit bohr --outdir ../out td.xyz tp.xyz
 
 # fixed colour scale and an opaque surface in the scene
@@ -300,9 +242,9 @@ go wrong:
 
 ---
 
-## 5. Step 2 — Look at it interactively (`esp.pml`)
+## 4. Step 2 — Look at it interactively (`esp.pml`)
 
-Before rendering anything, check that structure and grids actually line up:
+Before rendering anything, check that structure and grids actually line up (For that the script needs to be executed with the --pymol parameter):
 
 ```bash
 pymol esp.pml
@@ -315,9 +257,7 @@ cd /path/to/molecule
 @esp.pml
 ```
 
-The script loads the structure and both cubes, builds the ρ = 0.001 isosurface,
-maps the ESP onto it and shows the colour ramp. Rotate it. The molecular skeleton
-should sit inside its surface, not next to it.
+The script loads the structure and both cubes, builds the ρ = 0.001 isosurface, maps the ESP onto it and shows the colour ramp. Rotate it. The molecular skeleton should sit inside its surface, not next to it.
 
 Handy while exploring:
 
@@ -328,12 +268,11 @@ set transparency, 0.15  # skeleton shows through (default)
 disable espramp         # hide the colour bar
 ```
 
-`esp.pml` always carries the colour scale that was actually used for that
-molecule's images, so what you see interactively matches the figure set.
+`esp.pml` always carries the colour scale that was actually used for that  molecule's images, so what you see interactively matches the figure set.
 
 ---
 
-## 6. Step 3 — Render the standard image set (`render_esp.py`)
+## 5. Step 3 — Render the standard image set (`render_esp.py`)
 
 ```bash
 cd scripts
@@ -353,10 +292,7 @@ PyMOL's `orient`:
 | `*_sigma.png` | along the C–halogen axis, from outside | **the σ-hole, head on** |
 | `*_edge.png` | in the molecular plane | overall profile |
 
-Every molecule therefore lands in the same orientation automatically — that is
-what makes an image set comparable, and it is why no manual rotation is needed or
-wanted. For molecules without a halogen, `*_sigma.png` looks down the longest
-principal axis instead; read the file name as "axial view" in that case.
+Every molecule therefore lands in the same orientation automatically — that is what makes an image set comparable, and it is why no manual rotation is needed or wanted. For molecules without a halogen, `*_sigma.png` looks down the longest principal axis instead; read the file name as "axial view" in that case.
 
 ### Options
 
@@ -410,7 +346,7 @@ pymol -ckq render_esp.py -- --prefix molecule
 
 ---
 
-## 7. Step 4 — Several molecules at once (`run_all.py`)
+## 6. Step 4 — Several molecules at once (`run_all.py`)
 
 Put each molecule in its own folder under a common root — for your own data that
 is `sandbox/`, which git ignores:
@@ -490,7 +426,7 @@ python run_all.py
 
 ---
 
-## 8. What the workflow writes
+## 7. What the workflow writes
 
 Per molecule folder:
 
@@ -532,7 +468,7 @@ uninterpretable.
 
 ---
 
-## 9. Console output and colours
+## 8. Console output and colours
 
 `render_esp.py` and `run_all.py` print the measured values per molecule, with
 molecule headers in green and halogen symbols in cyan so the relevant lines stand
@@ -570,6 +506,13 @@ NO_COLOR=1 python run_all.py --root ../sandbox
 ```
 
 ---
+
+## 9. Create Tp.xyz, Td.xyz and a structure file from a SMILES notation
+
+In order to create your own files to test the application with your own molecules, a script  is provided within the /tools folder:
+`tools/CreateTpTdFromSmiles.py`.
+
+Running this script needs a seperate environment — see `tools/environment-testdata.yml` and all infos about it can be found in the `tools/README.txt`.
 
 ## 10. Repository layout
 
