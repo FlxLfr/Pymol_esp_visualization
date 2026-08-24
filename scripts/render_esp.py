@@ -47,14 +47,17 @@ from __future__ import annotations
 
 import argparse
 import glob
-import math
 import os
 import sys
 
 import numpy as np
 
 import ansi
-import xyzToCube                    # nur fuer die Elementliste, siehe Z_SYMBOL
+import xyzToCube                    # Elementliste (siehe Z_SYMBOL) und Schale
+# Die Schalenauswertung (rho = iso) und die Farbskala stehen in xyzToCube.py,
+# weil das Konvertierskript sie fuer sein eigenes esp.pml ebenfalls braucht.
+# Beide Skripte benutzen damit dieselbe Definition von "auf der Isoflaeche".
+from xyzToCube import esp_statistics, nice_range, shell_mask, SHELL_TOL_FACTOR
 from constants import BOHR_PER_ANGSTROM, HARTREE_TO_KCAL, HARTREE_TO_KJ
 
 
@@ -94,30 +97,14 @@ def read_cube(path):
     return values.reshape(n), atoms, origin, voxel
 
 
-def esp_statistics(density, esp, iso=0.001, tol_factor=0.12):
-    """ESP-Kennzahlen auf der rho=iso-Schale.
-
-    Liefert (V_min, V_max, anzahl_punkte) in atomaren Einheiten.
-    ``tol_factor`` legt die Schalendicke relativ zum Isowert fest.
-    """
-    mask = np.abs(density - iso) < iso * tol_factor
-    if mask.sum() < 50:                        # Schale zu duenn -> aufweiten
-        mask = np.abs(density - iso) < iso * 0.30
-    if mask.sum() == 0:
-        return None, None, 0
-    shell = esp[mask]
-    return float(shell.min()), float(shell.max()), int(mask.sum())
-
-
-def shell_points(density, esp, origin, voxel, iso=0.001, tol_factor=0.12):
+def shell_points(density, esp, origin, voxel, iso=0.001,
+                 tol_factor=SHELL_TOL_FACTOR):
     """Koordinaten und ESP-Werte der Gitterpunkte auf der rho=iso-Schale.
 
     Nur die Schalenpunkte werden materialisiert, nicht das ganze Gitter -
     bei 251^3 waere ein volles Koordinatenfeld sonst mehrere hundert MB.
     """
-    mask = np.abs(density - iso) < iso * tol_factor
-    if mask.sum() < 50:
-        mask = np.abs(density - iso) < iso * 0.30
+    mask = shell_mask(density, iso, tol_factor)
     idx = np.argwhere(mask)                       # (N, 3) Gitterindizes
     pos = origin + idx @ voxel                    # (N, 3) kartesisch, Bohr
     return pos, esp[mask]
@@ -389,12 +376,6 @@ def sigma_hole_interpolated(density, esp, origin, voxel, atoms, iso=0.001,
             "sigma_method": "interpoliert"}
 
     return result
-
-
-def nice_range(vmin, vmax, step=0.005):
-    """Symmetrischer, auf ``step`` aufgerundeter Bereich."""
-    amp = max(abs(vmin), abs(vmax))
-    return math.ceil(amp / step) * step
 
 
 # ----------------------------------------------------------------------------

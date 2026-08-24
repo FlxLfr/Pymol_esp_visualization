@@ -509,27 +509,77 @@ PML_RAMPS = {
 }
 
 
-def auto_esp_range(density, esp, iso=0.001, tol_factor=0.12, step=0.005):
+# ----------------------------------------------------------------------------
+# Schalenauswertung (rho = iso) und Farbskala
+#
+# Gemeinsame Quelle fuer beide Skripte: render_esp.py importiert shell_mask(),
+# esp_statistics() und nice_range() von hier, statt sie ein zweites Mal zu
+# definieren. Vorher stand die Maskenlogik dreimal im Repo (hier in
+# auto_esp_range, in render_esp.esp_statistics und in render_esp.shell_points).
+# Eine geaenderte Schalendicke haette an allen drei Stellen nachgezogen werden
+# muessen - sonst waeren die Zahlen in der Statistik und die Farbskala im Bild
+# stillschweigend auseinandergelaufen.
+# ----------------------------------------------------------------------------
+
+# Schalendicke relativ zum Isowert. 0.12 haelt die Schale duenn genug, dass die
+# Werte wirklich von der Isoflaeche stammen; ist sie dadurch zu schwach besetzt
+# (grobes Gitter, kleines Molekuel), weitet SHELL_TOL_FALLBACK einmalig auf.
+SHELL_TOL_FACTOR = 0.12
+SHELL_TOL_FALLBACK = 0.30
+SHELL_MIN_POINTS = 50
+
+
+def shell_mask(density, iso=0.001, tol_factor=SHELL_TOL_FACTOR):
+    """Boolesche Maske der Gitterpunkte auf der rho=iso-Schale.
+
+    Zurueckgegeben wird nur die Maske, nicht die Werte - so koennen Aufrufer
+    dieselbe Auswahl auf ESP-Werte, Gitterindizes oder Koordinaten anwenden,
+    ohne das (bei 251^3 mehrere hundert MB grosse) Gitter zu kopieren.
+    """
+    mask = np.abs(density - iso) < iso * tol_factor
+    if mask.sum() < SHELL_MIN_POINTS:         # Schale zu duenn -> aufweiten
+        mask = np.abs(density - iso) < iso * SHELL_TOL_FALLBACK
+    return mask
+
+
+def esp_statistics(density, esp, iso=0.001, tol_factor=SHELL_TOL_FACTOR):
+    """ESP-Kennzahlen auf der rho=iso-Schale.
+
+    Liefert (V_min, V_max, anzahl_punkte) in atomaren Einheiten.
+    ``tol_factor`` legt die Schalendicke relativ zum Isowert fest.
+    """
+    mask = shell_mask(density, iso, tol_factor)
+    if not mask.any():
+        return None, None, 0
+    shell = esp[mask]
+    return float(shell.min()), float(shell.max()), int(mask.sum())
+
+
+def nice_range(vmin, vmax, step=0.005):
+    """Symmetrischer, auf ``step`` aufgerundeter Bereich."""
+    amp = max(abs(vmin), abs(vmax))
+    return math.ceil(amp / step) * step
+
+
+def auto_esp_range(density, esp, iso=0.001, tol_factor=SHELL_TOL_FACTOR,
+                   step=0.005):
     """Symmetrische Farbskala aus den ESP-Werten auf der rho=iso-Schale.
 
-    Dieselbe Regel wie in render_esp.py: den Bereich NICHT aus dem ganzen
-    Gitter nehmen (dort dominieren die Kernsingularitaeten mit mehreren hundert
-    a.u.), sondern nur aus den Punkten auf der Isoflaeche, und das Ergebnis
-    symmetrisch auf ein glattes Vielfaches von ``step`` aufrunden.
+    Den Bereich NICHT aus dem ganzen Gitter nehmen (dort dominieren die
+    Kernsingularitaeten mit mehreren hundert a.u.), sondern nur aus den Punkten
+    auf der Isoflaeche, und das Ergebnis symmetrisch auf ein glattes Vielfaches
+    von ``step`` aufrunden. Genau die Kombination, die render_esp.py fuer
+    ``--esp-range auto`` benutzt - dort aus denselben zwei Funktionen.
 
     Rueckgabe: halbe Breite in a.u., oder None wenn keine Schale gefunden wird
     (dann fehlt die Dichtedatei, oder der Isowert passt nicht zu den Daten).
     """
     if density is None or esp is None or density.shape != esp.shape:
         return None
-    mask = np.abs(density - iso) < iso * tol_factor
-    if mask.sum() < 50:                       # Schale zu duenn -> aufweiten
-        mask = np.abs(density - iso) < iso * 0.30
-    if not mask.any():
+    vmin, vmax, npts = esp_statistics(density, esp, iso, tol_factor)
+    if npts == 0:
         return None
-    shell = esp[mask]
-    amp = max(abs(float(shell.min())), abs(float(shell.max())))
-    return math.ceil(amp / step) * step
+    return nice_range(vmin, vmax, step)
 
 
 def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
