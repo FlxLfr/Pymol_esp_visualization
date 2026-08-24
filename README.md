@@ -109,7 +109,7 @@ conda activate esp
 | `matplotlib` | the separate `*_colorbar.png` only |
 
 
-### 1.3 Verify & Somketest
+### 1.3 Verify & Smoketest
 
 ```bash
 python -c "import pymol, numpy, matplotlib; print('ok')"
@@ -198,13 +198,6 @@ the workflow:
 ```bash
 cd scripts
 python run_all.py --root ../sandbox --two-pass
-```
-
-**Only check that the installation works:**
-
-```bash
-cd scripts
-python run_all.py
 ```
 
 ---
