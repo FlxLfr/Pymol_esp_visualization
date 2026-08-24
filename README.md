@@ -112,26 +112,17 @@ conda activate esp
 
 ```bash
 python -c "import pymol, numpy, matplotlib; print('ok')"
-python -c "import sys; print(sys.executable)"
 ```
 
-The second line must point *inside* the `esp` environment. If it points at a
-system Python instead, the environment was not activated — see
-[Troubleshooting](#11-troubleshooting).
-
-Then run the built-in smoke test, which exercises the whole chain on data that
-is known to work:
-
+### 1.4 Smoketest
+The smoke test is run with the following command:
 ```bash
 cd scripts
 python run_all.py
 ```
-
-It converts, renders and writes to `reference/*/images_check/` and
-`reference/summary_check.csv` — never to the committed `images/`. Expected for
-4-bromoacetophenone: V<sub>S,min</sub> = −0.0638 a.u. on O3,
-V<sub>S,max</sub> = +0.0469 a.u. on H14, σ-hole = +0.0221 a.u., colour range
-±0.065 a.u. If those come out, the installation is fine.
+Running the (run_all.py) script without parameters results in the script using the \reference\4-bromacetophenon directory. It converts, renders and saves the images to: `reference/4-bromacetophenon/images_check/` and concludes a summary in the `reference/summary_check.csv`.
+The summary and images can now be compared with the initial downloaded images and the script. When the results are the same 
+Expected for 4-bromoacetophenone: V<sub>S,min</sub> = −0.0638 a.u. on O3, V<sub>S,max</sub> = +0.0469 a.u. on H14, σ-hole = +0.0221 a.u., colour range ±0.065 a.u. If those come out, the installation is fine.
 
 ---
 
