@@ -563,7 +563,8 @@ NO_COLOR=1 python run_all.py --root ../sandbox
 ## 10. Create Tp.xyz, Td.xyz and a structure file from a SMILES notation
 
 In order to create your own files to test the application with your own molecules, a script  is provided within the /tools folder:
-`tools/CreateTpTdFromSmiles.py`
+`tools/CreateTpTdFromSmiles.py`.
+
 Running this script needs a seperate environment — see `tools/environment-testdata.yml` and all infos about it can be found in the `tools/README.txt`.
 
 ## 11. Repository layout
