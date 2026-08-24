@@ -38,16 +38,15 @@ onto an electron-density isosurface.
 
 1. [Installation](#1-installation)
 2. [Input files and formats](#2-input-files-and-formats)
-3. [Quick start](#3-quick-start)
-4. [Step 1 — Convert the grids to cube (`xyzToCube.py`)](#4-step-1--convert-the-grids-to-cube-xyztocubepy)
-5. [Step 2 — Look at it interactively (`esp.pml`)](#5-step-2--look-at-it-interactively-esppml)
-6. [Step 3 — Render the standard image set (`render_esp.py`)](#6-step-3--render-the-standard-image-set-render_esppy)
-7. [Step 4 — Several molecules at once (`run_all.py`)](#7-step-4--several-molecules-at-once-run_allpy)
-8. [What the workflow writes](#8-what-the-workflow-writes)
-9. [Console output and colours](#9-console-output-and-colours)
-10. [Create Tp.xyz, Td.xyz and a structure file from a SMILES notation](#10-create-tp.xyz,-td.xyz,-and-a-structure-file-from-a-smiles-notation)
-11. [Repository layout](#11-repository-layout)
-12. [Troubleshooting](#12-troubleshooting)
+3. [Step 1 — Convert the grids to cube (`xyzToCube.py`)](#3-step-1--convert-the-grids-to-cube-xyztocubepy)
+4. [Step 2 — Look at it interactively (`esp.pml`)](#4-step-2--look-at-it-interactively-esppml)
+5. [Step 3 — Render the standard image set (`render_esp.py`)](#5-step-3--render-the-standard-image-set-render_esppy)
+6. [Step 4 — Several molecules at once (`run_all.py`)](#6-step-4--several-molecules-at-once-run_allpy)
+7. [What the workflow writes](#7-what-the-workflow-writes)
+8. [Console output and colours](#8-console-output-and-colours)
+9. [Create Tp.xyz, Td.xyz and a structure file from a SMILES notation](#9-create-tp.xyz,-td.xyz,-and-a-structure-file-from-a-smiles-notation)
+10. [Repository layout](#10-repository-layout)
+11. [Troubleshooting](#11-troubleshooting)
 
 ---
 
@@ -121,8 +120,7 @@ cd scripts
 python run_all.py
 ```
 Running the (run_all.py) script without parameters results in the script using the `/reference/4-bromacetophenon` directory. It converts, renders and saves the images to: `reference/4-bromacetophenon/images_check/` and concludes a summary in the `reference/summary_check.csv`.
-The summary and images can now be compared with the initial downloaded images and the script. When the results are the same 
-Expected for 4-bromoacetophenone: V<sub>S,min</sub> = −0.0638 a.u. on O3, V<sub>S,max</sub> = +0.0469 a.u. on H14, σ-hole = +0.0221 a.u., colour range ±0.065 a.u. If those come out, the installation is fine.
+The summary and images can now be compared with the initial downloaded images and the script. When the results are the same, you can contninue with the visualization of your own molecular files 
 
 ---
 
@@ -157,7 +155,7 @@ Both `xyzToCube.py` and `render_esp.py` accept the same three formats:
 
 | Format | Notes |
 |---|---|
-| `.xyz` | `Symbol x y z`. With or without the leading atom-count and comment lines — a bare coordinate list is accepted. Unit set by `--struct-unit` (default Å). |
+| `.xyz` | `Symbol x y z`. With or without the leading atom-count and comment lines — a bare coordinate list is accepted. Default Å. Can be changed with --struct-unit |
 | `.mol` | MDL molfile, V2000 and V3000. **Coordinates come *before* the element symbol**, the reverse of xyz. Always Å. |
 | `.sdf` | SD-file; only the first record (up to `$$$$`) is read. Always Å. |
 
@@ -176,33 +174,7 @@ removes the failure mode entirely.
 
 ---
 
-## 3. Quick start
-
-Everything is run from `scripts/`, with the `esp` environment active.
-
-**One molecule, from raw grids to images:**
-
-```bash
-cd scripts
-python xyzToCube.py --struct ../sandbox/brombenzol/brombenzol_aro_opti.mol \
-                    ../sandbox/brombenzol/td.xyz ../sandbox/brombenzol/tp.xyz --pymol
-python render_esp.py --density ../sandbox/brombenzol/td.cube \
-                     --esp ../sandbox/brombenzol/tp.cube \
-                     --struct ../sandbox/brombenzol/brombenzol_aro_opti.mol \
-                     --prefix brombenzol --outdir ../sandbox/brombenzol/images
-```
-
-**A whole folder of molecules, in one command** — this is the normal way to use
-the workflow:
-
-```bash
-cd scripts
-python run_all.py --root ../sandbox --two-pass
-```
-
----
-
-## 4. Step 1 — Convert the grids to cube (`xyzToCube.py`)
+## 3. Step 1 — Convert the grids to cube (`xyzToCube.py`)
 
 ```bash
 cd scripts
@@ -273,7 +245,7 @@ go wrong:
 
 ---
 
-## 5. Step 2 — Look at it interactively (`esp.pml`)
+## 4. Step 2 — Look at it interactively (`esp.pml`)
 
 Before rendering anything, check that structure and grids actually line up:
 
@@ -306,7 +278,7 @@ molecule's images, so what you see interactively matches the figure set.
 
 ---
 
-## 6. Step 3 — Render the standard image set (`render_esp.py`)
+## 5. Step 3 — Render the standard image set (`render_esp.py`)
 
 ```bash
 cd scripts
@@ -383,7 +355,7 @@ pymol -ckq render_esp.py -- --prefix molecule
 
 ---
 
-## 7. Step 4 — Several molecules at once (`run_all.py`)
+## 6. Step 4 — Several molecules at once (`run_all.py`)
 
 Put each molecule in its own folder under a common root — for your own data that
 is `sandbox/`, which git ignores:
@@ -463,7 +435,7 @@ python run_all.py
 
 ---
 
-## 8. What the workflow writes
+## 7. What the workflow writes
 
 Per molecule folder:
 
@@ -505,7 +477,7 @@ uninterpretable.
 
 ---
 
-## 9. Console output and colours
+## 8. Console output and colours
 
 `render_esp.py` and `run_all.py` print the measured values per molecule, with
 molecule headers in green and halogen symbols in cyan so the relevant lines stand
@@ -544,14 +516,14 @@ NO_COLOR=1 python run_all.py --root ../sandbox
 
 ---
 
-## 10. Create Tp.xyz, Td.xyz and a structure file from a SMILES notation
+## 9. Create Tp.xyz, Td.xyz and a structure file from a SMILES notation
 
 In order to create your own files to test the application with your own molecules, a script  is provided within the /tools folder:
 `tools/CreateTpTdFromSmiles.py`.
 
 Running this script needs a seperate environment — see `tools/environment-testdata.yml` and all infos about it can be found in the `tools/README.txt`.
 
-## 11. Repository layout
+## 10. Repository layout
 
 ```
 esp_visualization/
@@ -612,7 +584,7 @@ versions drift apart.
 
 ---
 
-## 12. Troubleshooting
+## 11. Troubleshooting
 
 **`ContourSurfVolume: VTKm not available, falling back to internal implementation`**
 Harmless, and it appears on every run. VTK-m is an optional parallel contouring
