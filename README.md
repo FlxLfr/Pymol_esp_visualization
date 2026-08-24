@@ -181,9 +181,7 @@ cd scripts
 python xyzToCube.py --struct ../path/to/molecule.mol ../path/to/td.xyz ../path/to/tp.xyz --pymol
 ```
 
-Writes `td.cube`, `tp.cube` and — with `--pymol` — a ready-to-use `esp.pml` next
-to the input files. Which grid is density and which is potential is detected from
-the file header, not from the file name.
+Writes `td.cube`, `tp.cube` and with `--pymol` a ready-to-use `esp.pml` PyMOL script is created next to the input files. Which .xyz grid is density and which is potential is detected from the file header, not from the file name.
 
 ### Positional argument
 
@@ -203,12 +201,11 @@ the file header, not from the file name.
 
 ### Options that change only the generated `esp.pml`
 
-They do nothing without `--pymol`, which is why `--help` lists them in their own
-group.
+They do nothing without `--pymol`, which is why `--help` lists them in their own group.
 
 | Option | Default | Effect |
 |---|---|---|
-| `--pymol` | off | write the PyMOL scene at all. |
+| `--pymol` | off | write the PyMOL scene using the resulted .cube files |
 | `--esp-range` | `auto` | half-width of the colour scale in a.u., or `auto` — derived from the ESP on the isosurface, exactly as `render_esp.py` does it. |
 | `--pml-iso` | `0.001` | isovalue **drawn in the scene**. Deliberately named apart from `render_esp.py`'s `--iso`: that one moves the measured numbers, this one only the picture. |
 | `--transparency` | `0.15` | surface transparency, 0…1. `0` = opaque. |
@@ -223,7 +220,7 @@ python xyzToCube.py --struct mol.mol td.xyz tp.xyz --pymol
 # fast pass: 8x smaller cubes, images look identical
 python xyzToCube.py --struct mol.mol td.xyz tp.xyz --stride 2 --pymol
 
-# structure file already in Bohr, cubes into a separate folder
+# structure file already in Bohr, cubes into a separate "out" folder
 python xyzToCube.py --struct mol.xyz --struct-unit bohr --outdir ../out td.xyz tp.xyz
 
 # fixed colour scale and an opaque surface in the scene
@@ -247,7 +244,7 @@ go wrong:
 
 ## 4. Step 2 — Look at it interactively (`esp.pml`)
 
-Before rendering anything, check that structure and grids actually line up:
+Before rendering anything, check that structure and grids actually line up (For that the script needs to be executed with the --pymol parameter):
 
 ```bash
 pymol esp.pml
@@ -260,9 +257,7 @@ cd /path/to/molecule
 @esp.pml
 ```
 
-The script loads the structure and both cubes, builds the ρ = 0.001 isosurface,
-maps the ESP onto it and shows the colour ramp. Rotate it. The molecular skeleton
-should sit inside its surface, not next to it.
+The script loads the structure and both cubes, builds the ρ = 0.001 isosurface, maps the ESP onto it and shows the colour ramp. Rotate it. The molecular skeleton should sit inside its surface, not next to it.
 
 Handy while exploring:
 
@@ -273,8 +268,7 @@ set transparency, 0.15  # skeleton shows through (default)
 disable espramp         # hide the colour bar
 ```
 
-`esp.pml` always carries the colour scale that was actually used for that
-molecule's images, so what you see interactively matches the figure set.
+`esp.pml` always carries the colour scale that was actually used for that  molecule's images, so what you see interactively matches the figure set.
 
 ---
 
@@ -298,10 +292,7 @@ PyMOL's `orient`:
 | `*_sigma.png` | along the C–halogen axis, from outside | **the σ-hole, head on** |
 | `*_edge.png` | in the molecular plane | overall profile |
 
-Every molecule therefore lands in the same orientation automatically — that is
-what makes an image set comparable, and it is why no manual rotation is needed or
-wanted. For molecules without a halogen, `*_sigma.png` looks down the longest
-principal axis instead; read the file name as "axial view" in that case.
+Every molecule therefore lands in the same orientation automatically — that is what makes an image set comparable, and it is why no manual rotation is needed or wanted. For molecules without a halogen, `*_sigma.png` looks down the longest principal axis instead; read the file name as "axial view" in that case.
 
 ### Options
 
