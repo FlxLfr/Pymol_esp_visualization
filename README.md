@@ -45,8 +45,9 @@ onto an electron-density isosurface.
 7. [Step 4 — Several molecules at once (`run_all.py`)](#7-step-4--several-molecules-at-once-run_allpy)
 8. [What the workflow writes](#8-what-the-workflow-writes)
 9. [Console output and colours](#9-console-output-and-colours)
-10. [Repository layout](#10-repository-layout)
-11. [Troubleshooting](#11-troubleshooting)
+10. [Create Tp.xyz, Td.xyz and a structure file from a SMILES notation](#10-create-tp.xyz,-td.xyz,-and-a-structure-file-from-a-smiles-notation)
+11. [Repository layout](#11-repository-layout)
+12. [Troubleshooting](#12-troubleshooting)
 
 ---
 
