@@ -108,13 +108,12 @@ conda activate esp
 | `matplotlib` | the separate `*_colorbar.png` only |
 
 
-### 1.3 Verify
+### 1.3 Verify & Somketest
 
 ```bash
 python -c "import pymol, numpy, matplotlib; print('ok')"
 ```
 
-### 1.4 Smoketest
 The smoke test is run with the following command:
 ```bash
 cd scripts
