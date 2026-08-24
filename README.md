@@ -167,7 +167,7 @@ Per molecule, in one folder:
 |---|---|---|
 | `td.xyz` | Turbomole `pointval` **total density** grid | Bohr |
 | `tp.xyz` | Turbomole `pointval` **total potential** (ESP) grid | Bohr |
-| `*.mol` / `*.sdf` / `*.pdb` / `*.xyz` | molecular structure | Å (default) |
+| `*.mol` / `*.sdf` / `*.xyz` | molecular structure | Å (default) |
 
 **`td.xyz` and `tp.xyz` are not structure files** despite the extension. They are
 ASCII point clouds — one line per grid point, carrying the full coordinates plus
@@ -186,16 +186,15 @@ implicitly.
 
 ### Accepted structure formats
 
-Both `xyzToCube.py` and `render_esp.py` accept the same four formats:
+Both `xyzToCube.py` and `render_esp.py` accept the same three formats:
 
 | Format | Notes |
 |---|---|
 | `.xyz` | `Symbol x y z`. With or without the leading atom-count and comment lines — a bare coordinate list is accepted. Unit set by `--struct-unit` (default Å). |
 | `.mol` | MDL molfile, V2000 and V3000. **Coordinates come *before* the element symbol**, the reverse of xyz. Always Å. |
 | `.sdf` | SD-file; only the first record (up to `$$$$`) is read. Always Å. |
-| `.pdb` | `ATOM`/`HETATM` records. Element from columns 77–78, otherwise derived from the atom name. Always Å. |
 
-`--struct-unit` applies to `.xyz` only. Molfile and PDB are in Ångström by
+`--struct-unit` applies to `.xyz` only. Molfile coordinates are in Ångström by
 definition, so the option is ignored for them.
 
 **Prefer `.mol`/`.sdf` over `.xyz`**: they carry bond information, so PyMOL draws
@@ -217,21 +216,28 @@ cd scripts
 python xyzToCube.py --struct ../path/to/molecule.mol ../path/to/td.xyz ../path/to/tp.xyz --pymol
 ```
 
-`--struct` takes `.xyz`, `.mol`, `.sdf` or `.pdb` — see
+`--struct` takes `.xyz`, `.mol` or `.sdf` — see
 [§4](#accepted-structure-formats).
 
 This writes `td.cube`, `tp.cube` and (with `--pymol`) a ready-to-use `esp.pml`
 next to the input.
 
-Useful options:
+Useful options. The first group changes the cube files, the second only the
+generated scene — `--help` shows them separated for that reason:
 
-| Option | Effect |
+| Option changing the **cube files** | Effect |
 |---|---|
 | `--stride 2` | keep every 2nd grid point in each direction → **8× smaller** files |
-| `--struct-unit bohr` | structure file is already in Bohr |
-| `--esp-range 0.035` | colour range written into the generated `esp.pml` |
-| `--transparency 0` | opaque surface in the generated `esp.pml` |
+| `--struct-unit bohr` | structure file is already in Bohr (ignored for `.mol`/`.sdf`) |
 | `--outdir DIR` | write the cubes somewhere else |
+
+| Option changing only **`esp.pml`** | Default | Effect |
+|---|---|---|
+| `--pymol` | off | write the scene at all — without it the four below do nothing |
+| `--esp-range` | `auto` | colour range; `auto` derives it from the ESP on the isosurface, exactly as `render_esp.py` does |
+| `--pml-iso` | `0.001` | isovalue **drawn in the scene**. Named apart from `render_esp.py`'s `--iso` on purpose: that one moves the measured numbers, this one only the picture |
+| `--transparency` | `0.15` | `0` = opaque surface |
+| `--rainbow` | off | rainbow ramp in the scene — see [§8.1](#81-the-rainbow-ramp) |
 
 **On `--stride`.** For bromobenzene, decimating the 251³ grid to 126³ leaves
 V<sub>S,min</sub> unchanged and shifts V<sub>S,max</sub> by 0.9 % (+19.58 vs.
@@ -1132,12 +1138,6 @@ incorrectly. The provided scripts set this already.
 * PyMOL — The PyMOL Molecular Graphics System, Schrödinger, LLC.
   Open-source build: <https://github.com/schrodinger/pymol-open-source>
 
-The comparison of the candidate visualization programs, the criteria they were
-assessed against and the reasoning behind choosing PyMOL are not part of this
-SOP — someone following these instructions needs to know *how* to run the
-workflow, not which alternatives were weighed. They are documented separately in
-**`Software_Evaluation_ESP_Visualization.docx`** in the project folder, together
-with the references for VMD, ChimeraX, Avogadro, Multiwfn and Molden.
 
 ---
 

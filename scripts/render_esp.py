@@ -28,7 +28,7 @@ Aufruf
                                --prefix brombenzol
 
 Ohne Argumente sucht das Skript im aktuellen Ordner nach ``td.cube``,
-``tp.cube`` und einer Struktur (.mol/.sdf/.pdb/.xyz).
+``tp.cube`` und einer Struktur (.mol/.sdf/.xyz).
 
 
 Farbskala
@@ -54,6 +54,7 @@ import sys
 import numpy as np
 
 import ansi
+import xyzToCube                    # nur fuer die Elementliste, siehe Z_SYMBOL
 from constants import BOHR_PER_ANGSTROM, HARTREE_TO_KCAL, HARTREE_TO_KJ
 
 
@@ -444,10 +445,12 @@ def ramp_levels(rng, rainbow=False):
 # Nur als Groessenordnung fuer die Abstandsgrenze der sigma-Loch-Suche.
 VDW_ANGSTROM = {9: 1.47, 17: 1.75, 35: 1.85, 53: 1.98}
 
-Z_SYMBOL = {1: "H", 5: "B", 6: "C", 7: "N", 8: "O", 9: "F", 11: "Na",
-            12: "Mg", 14: "Si", 15: "P", 16: "S", 17: "Cl", 19: "K",
-            20: "Ca", 26: "Fe", 29: "Cu", 30: "Zn", 34: "Se", 35: "Br",
-            53: "I"}
+# Rueckuebersetzung Ordnungszahl -> Symbol, abgeleitet aus derselben Liste, mit
+# der xyzToCube.py in die Gegenrichtung uebersetzt. Frueher stand hier eine
+# zweite, handgepflegte Tabelle mit 20 Eintraegen: ein Molekuel mit einem
+# Element, das dort fehlte, wurde sauber konvertiert und anschliessend als
+# "Z13" statt "Al13" beschriftet. Eine Quelle, beide Richtungen.
+Z_SYMBOL = {i + 1: sym for i, sym in enumerate(xyzToCube.ELEMENTS)}
 
 
 def z_symbol(z):
@@ -872,7 +875,7 @@ def main(argv):
     p.add_argument("--density", default=None, help="Cube der Elektronendichte")
     p.add_argument("--esp", default=None, help="Cube des ESP")
     p.add_argument("--struct", default=None,
-                   help="Strukturdatei (.mol/.sdf/.pdb/.xyz)")
+                   help="Strukturdatei (.mol/.sdf/.xyz)")
     p.add_argument("--prefix", default=None, help="Praefix der Bildnamen")
     p.add_argument("--outdir", default="images", help="Ausgabeordner")
     p.add_argument("--iso", type=float, default=0.001,
@@ -910,7 +913,7 @@ def main(argv):
     args.density = args.density or autodetect(["td.cube", "*dens*.cube"])
     args.esp = args.esp or autodetect(["tp.cube", "*esp*.cube", "*pot*.cube"])
     args.struct = args.struct or autodetect(
-        ["*.mol", "*.sdf", "*.pdb", "*.xyz"])
+        ["*.mol", "*.sdf", "*.xyz"])
 
     missing = [n for n, v in (("--density", args.density),
                               ("--esp", args.esp),

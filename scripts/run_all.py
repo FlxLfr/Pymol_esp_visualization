@@ -22,7 +22,7 @@ A molecule folder is any directory that contains either
     td.xyz  +  tp.xyz          (Turbomole output, will be converted)
 or  td.cube +  tp.cube         (already converted)
 
-plus a structure file (``.mol``, ``.sdf``, ``.pdb`` or ``.xyz``).
+plus a structure file (``.mol``, ``.sdf`` or ``.xyz``).
 
 
 Typical use
@@ -68,7 +68,7 @@ import render_esp                                   # noqa: E402
 import ansi                                         # noqa: E402
 from constants import HARTREE_TO_KCAL, HARTREE_TO_KJ  # noqa: E402
 
-STRUCT_EXT = (".mol", ".sdf", ".pdb", ".xyz")
+STRUCT_EXT = (".mol", ".sdf", ".xyz")
 GRID_NAMES = ("td", "tp")
 
 # reference/ liegt neben scripts/, nicht im aktuellen Arbeitsverzeichnis
@@ -82,7 +82,7 @@ DEFAULT_ROOT = os.path.normpath(os.path.join(_HERE, "..", "reference"))
 def find_structure(folder, exclude):
     """First structure file in ``folder`` that is not one of the grid files."""
     excl = {os.path.abspath(p) for p in exclude if p}
-    # .mol/.sdf/.pdb preferred over .xyz: they carry bond information, and a
+    # .mol/.sdf preferred over .xyz: they carry bond information, and a
     # bare .xyz can collide with the Turbomole grid files of the same suffix.
     for ext in STRUCT_EXT:
         for name in sorted(os.listdir(folder)):

@@ -51,7 +51,7 @@ verwenden::
 
     python xyzToCube.py --struct brombenzol_aro_opti.mol td.xyz tp.xyz --stride 2
 
-Als Strukturdatei werden ``.xyz``, ``.mol``, ``.sdf`` und ``.pdb`` akzeptiert -
+Als Strukturdatei werden ``.xyz``, ``.mol`` und ``.sdf`` akzeptiert -
 dieselben Formate wie in render_esp.py. Empfehlung: beiden Skripten *dieselbe*
 Datei geben. Sonst stammen die Atome im Cube-Header aus der einen und die
 Staebchen in PyMOL aus der anderen Quelle, und eine Abweichung zwischen beiden
@@ -63,6 +63,7 @@ Nur numpy wird benoetigt (``pip install numpy``).
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import re
 import sys
@@ -77,7 +78,10 @@ import numpy as np
 from constants import (BOHR_PER_ANGSTROM, ANGSTROM_PER_BOHR,  # noqa: F401
                        HARTREE_TO_KJ)
 
-# Ordnungszahlen fuer die gaengigen Elemente. Erweitern falls noetig.
+# Elementsymbole in der Reihenfolge der Ordnungszahl: die Position in der Liste
+# IST Z-1, daraus wird unten SYMBOL_TO_Z gebaut. Vollstaendiges Periodensystem
+# bis Oganesson (Z = 118); die Liste vorher endete bei Radon, was einen
+# vermeidbaren Fehlerfall fuer Actinoide erzeugt haette.
 ELEMENTS = [
     "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
     "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca",
@@ -87,7 +91,10 @@ ELEMENTS = [
     "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", "Nd",
     "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb",
     "Lu", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg",
-    "Tl", "Pb", "Bi", "Po", "At", "Rn",
+    "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th",
+    "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm",
+    "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh", "Hs", "Mt", "Ds",
+    "Rg", "Cn", "Nh", "Fl", "Mc", "Lv", "Ts", "Og",
 ]
 SYMBOL_TO_Z = {sym.upper(): i + 1 for i, sym in enumerate(ELEMENTS)}
 
@@ -193,29 +200,6 @@ def _read_molfile(lines, path):
     return atoms
 
 
-def _read_pdb(lines, path):
-    """PDB: ATOM-/HETATM-Zeilen, Koordinaten in Angstrom.
-
-    Das Elementsymbol steht in den Spalten 77-78; fehlt es, wird es aus dem
-    Atomnamen (Spalten 13-16) abgeleitet.
-    """
-    atoms = []
-    for line in lines:
-        if not line.startswith(("ATOM  ", "HETATM")):
-            continue
-        x = float(line[30:38])
-        y = float(line[38:46])
-        z = float(line[46:54])
-        sym = line[76:78].strip()
-        if not sym:
-            name = line[12:16].strip()
-            sym = re.sub(r"[^A-Za-z]", "", name)[:2]
-            if len(sym) == 2 and sym.capitalize().upper() not in SYMBOL_TO_Z:
-                sym = sym[0]
-        atoms.append((_symbol_to_z(sym, path), x, y, z))
-    return atoms
-
-
 def read_structure(path: str, unit: str = "angstrom"):
     """Liest eine Strukturdatei und liefert die Atome in **Bohr**.
 
@@ -225,13 +209,12 @@ def read_structure(path: str, unit: str = "angstrom"):
     ``.xyz``    ``Symbol x y z``, mit oder ohne Kopfzeilen
     ``.mol``    MDL-Molfile V2000/V3000 (Koordinaten *vor* dem Symbol)
     ``.sdf``    SD-File, erster Datensatz
-    ``.pdb``    ATOM-/HETATM-Zeilen
     ==========  =====================================================
 
     Rueckgabe: Liste von ``(Z, x, y, z)``.
 
-    ``unit`` gilt nur fuer xyz-Dateien - Molfile und PDB sind per Definition
-    in Angstrom, dort wird die Angabe ignoriert.
+    ``unit`` gilt nur fuer xyz-Dateien - Molfile-Koordinaten sind per
+    Definition in Angstrom, dort wird die Angabe ignoriert.
     """
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         lines = fh.read().splitlines()
@@ -248,9 +231,6 @@ def read_structure(path: str, unit: str = "angstrom"):
                 lines = lines[:i]
                 break
         atoms = _read_molfile(lines, path)
-        file_unit = "angstrom"
-    elif ext in (".pdb", ".ent"):
-        atoms = _read_pdb(lines, path)
         file_unit = "angstrom"
     else:
         atoms = _read_xyz(lines, path)
@@ -529,6 +509,29 @@ PML_RAMPS = {
 }
 
 
+def auto_esp_range(density, esp, iso=0.001, tol_factor=0.12, step=0.005):
+    """Symmetrische Farbskala aus den ESP-Werten auf der rho=iso-Schale.
+
+    Dieselbe Regel wie in render_esp.py: den Bereich NICHT aus dem ganzen
+    Gitter nehmen (dort dominieren die Kernsingularitaeten mit mehreren hundert
+    a.u.), sondern nur aus den Punkten auf der Isoflaeche, und das Ergebnis
+    symmetrisch auf ein glattes Vielfaches von ``step`` aufrunden.
+
+    Rueckgabe: halbe Breite in a.u., oder None wenn keine Schale gefunden wird
+    (dann fehlt die Dichtedatei, oder der Isowert passt nicht zu den Daten).
+    """
+    if density is None or esp is None or density.shape != esp.shape:
+        return None
+    mask = np.abs(density - iso) < iso * tol_factor
+    if mask.sum() < 50:                       # Schale zu duenn -> aufweiten
+        mask = np.abs(density - iso) < iso * 0.30
+    if not mask.any():
+        return None
+    shell = esp[mask]
+    amp = max(abs(float(shell.min())), abs(float(shell.max())))
+    return math.ceil(amp / step) * step
+
+
 def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
                        iso=0.001, transparency=0.15, rainbow=False):
     if density_cube:
@@ -582,28 +585,38 @@ def main(argv=None):
     p.add_argument("grids", nargs="+",
                    help="Turbomole-Gitterdateien (z.B. td.xyz tp.xyz)")
     p.add_argument("--struct", "-s", required=True,
-                   help="Strukturdatei: .xyz, .mol, .sdf oder .pdb")
+                   help="Strukturdatei: .xyz, .mol oder .sdf")
     p.add_argument("--struct-unit", choices=["angstrom", "bohr"],
                    default="angstrom",
-                   help="Einheit der Strukturdatei (Standard: angstrom); gilt nur fuer .xyz - .mol/.sdf/.pdb sind immer Angstrom")
+                   help="Einheit der Strukturdatei (Standard: angstrom); gilt nur fuer .xyz - .mol/.sdf sind immer Angstrom")
     p.add_argument("--outdir", "-o", default=None,
                    help="Ausgabeverzeichnis (Standard: neben der Eingabe)")
     p.add_argument("--stride", type=int, default=1,
                    help="Nur jeden n-ten Gitterpunkt schreiben "
                         "(2 => 8x kleinere Datei, Standard: 1)")
-    p.add_argument("--pymol", action="store_true",
+    p.add_argument("--quiet", "-q", action="store_true")
+
+    # Diese Optionen aendern NICHTS an den Cube-Dateien - sie beschreiben nur
+    # die Szene, die --pymol nebenbei schreibt. Deshalb eine eigene Gruppe und
+    # das Praefix --pml- bei allem, was sonst mit einer gleichnamigen Option in
+    # render_esp.py verwechselt werden koennte.
+    g = p.add_argument_group("PyMOL-Szene (nur zusammen mit --pymol)")
+    g.add_argument("--pymol", action="store_true",
                    help="Zusaetzlich ein fertiges esp.pml schreiben")
-    p.add_argument("--esp-range", type=float, default=0.03,
-                   help="Halbe Breite der ESP-Farbskala in a.u. "
-                        "(Standard: 0.03 => -0.03 .. +0.03)")
-    p.add_argument("--iso", type=float, default=0.001,
-                   help="Isowert der Dichteflaeche in a.u. (Standard: 0.001)")
-    p.add_argument("--transparency", type=float, default=0.15,
+    g.add_argument("--esp-range", default="auto",
+                   help="Halbe Breite der ESP-Farbskala in a.u., oder 'auto' "
+                        "(Standard): aus den ESP-Werten auf der Isoflaeche "
+                        "bestimmt, wie in render_esp.py")
+    g.add_argument("--pml-iso", type=float, default=0.001,
+                   help="Isowert der Dichteflaeche IM esp.pml (Standard: "
+                        "0.001). Aendert nur die Szene, nicht die Cube-Daten - "
+                        "im Gegensatz zu --iso in render_esp.py, das die "
+                        "gemessenen Kennwerte verschiebt.")
+    g.add_argument("--transparency", type=float, default=0.15,
                    help="Oberflaechentransparenz im esp.pml, 0..1 "
                         "(Standard: 0.15; 0 = opak)")
-    p.add_argument("--rainbow", action="store_true",
+    g.add_argument("--rainbow", action="store_true",
                    help="Regenbogenrampe im esp.pml statt rot-weiss-blau")
-    p.add_argument("--quiet", "-q", action="store_true")
     args = p.parse_args(argv)
 
     verbose = not args.quiet
@@ -617,6 +630,12 @@ def main(argv=None):
     if verbose:
         print(f"[1] Struktur: {args.struct} -> {len(atoms)} Atome "
               f"(eingelesen als {args.struct_unit}, gespeichert als Bohr)")
+
+    # Fuer --esp-range auto werden Dichte und ESP nach dem Schreiben noch
+    # einmal gebraucht. Nur dann im Speicher halten: bei 251^3 sind das 63 MB
+    # pro Gitter, die sonst unnoetig liegenbleiben.
+    need_auto = args.pymol and str(args.esp_range).lower() == "auto"
+    cache = {}
 
     written = {}
     for gpath in args.grids:
@@ -648,8 +667,12 @@ def main(argv=None):
         q = (info["quantity"] or "").lower()
         if "potential" in q:
             written["esp"] = outpath
+            if need_auto:
+                cache["esp"] = data
         elif "density" in q:
             written["density"] = outpath
+            if need_auto:
+                cache["density"] = data
         else:
             written.setdefault("other", []).append(outpath)
 
@@ -661,13 +684,27 @@ def main(argv=None):
             print("    ! Keine ESP-Datei erkannt - esp.pml wird uebersprungen.",
                   file=sys.stderr)
         else:
+            rng = None
+            if str(args.esp_range).lower() == "auto":
+                rng = auto_esp_range(cache.get("density"), cache.get("esp"),
+                                     iso=args.pml_iso)
+                if rng is None:
+                    rng = 0.03
+                    print("    ! Farbskala nicht automatisch bestimmbar "
+                          "(keine Dichtedatei?) - benutze +/- 0.03 a.u.",
+                          file=sys.stderr)
+                elif verbose:
+                    print(f"    Farbskala automatisch: +/- {rng:.4f} a.u.")
+            else:
+                rng = float(args.esp_range)
+
             write_pymol_script(
                 pml,
                 struct=os.path.relpath(os.path.abspath(args.struct), outdir),
                 density_cube=(os.path.basename(written["density"])
                               if "density" in written else None),
                 esp_cube=os.path.basename(esp_cube),
-                vmin=-args.esp_range, vmax=args.esp_range, iso=args.iso,
+                vmin=-rng, vmax=rng, iso=args.pml_iso,
                 transparency=args.transparency, rainbow=args.rainbow,
             )
             if verbose:
