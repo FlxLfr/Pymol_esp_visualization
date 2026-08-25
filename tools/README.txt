@@ -230,3 +230,90 @@ of the remaining time. Each of td.xyz and tp.xyz is around 60 MB.
 The generated td.xyz/tp.xyz are large and excluded by .gitignore. That is
 intentional: they are reproducible from the SMILES at any time with the
 command above.
+
+
+================================================================================
+iso_sweep.py and stride_sweep.py - the parameter study
+================================================================================
+
+WHAT THESE ARE FOR
+------------------
+
+Two of the workflow's defaults are asserted in the background document rather
+than obvious: rho = 0.001 for the isosurface, and stride 1 whenever a number
+goes into a table. Both claims need measurements behind them, and those
+measurements have to be repeatable - by the next reader, and by us after the
+next change to render_esp.py. These two scripts are that measurement.
+
+    iso_sweep.py       varies --iso at fixed resolution
+                       -> table in section 4.1 of the background document
+
+    stride_sweep.py    varies --stride at fixed isovalue
+                       -> table in section 4.2 of the background document
+
+They answer two different questions. The isovalue moves the physics: over
+0.0005 .. 0.004 a.u. the sigma-hole of bromobenzene grows by a factor of 4.4,
+so a sigma-hole value quoted without its isovalue means nothing. The stride
+only costs accuracy: from 0.12 to 0.96 Bohr the same value falls by 17 %,
+smoothly and always low, while the files shrink by a factor of 480. One
+parameter has to be fixed by convention, the other can be traded against disk
+space - and it is worth being able to show that, not just say it.
+
+Both scripts import esp_statistics(), shell_points(), local_extrema() and
+sigma_hole_interpolated() from ../scripts and call nothing of their own. That
+is deliberate: a parameter study that reimplements the measurement proves
+something about the study, not about the workflow. If render_esp.py changes,
+these tables change with it.
+
+
+WHAT THEY NEED
+--------------
+
+The normal 'esp' environment from environment.yml - numpy is enough. NOT the
+esp-testdata environment above; there is no PySCF and no RDKit involved, so
+these two run natively on Windows.
+
+PyMOL is not required either, although render_esp.py is imported: that module
+loads PyMOL only inside ensure_pymol(), which the measurement path never
+reaches.
+
+Input is td.cube and tp.cube, not the pointval files. Convert once with
+xyzToCube.py, then both studies run on the result in seconds instead of parsing
+1.25 GB of ASCII per pass.
+
+
+USAGE
+-----
+
+    conda activate esp
+
+    cd tools
+    python iso_sweep.py    --folder ../sandbox/brombenzol
+    python stride_sweep.py --folder ../sandbox/brombenzol
+
+Each prints its table and writes a CSV next to the cube files
+(iso_sweep_<folder>.csv, stride_sweep_<folder>.csv) carrying more columns than
+the document shows - among them the point-based sigma-hole for comparison with
+the ray-based one, which is the evidence for section 2.2.
+
+Other sampling points, and another molecule:
+
+    python iso_sweep.py    --isos 0.001 0.002 --folder ../sandbox/iodbenzol
+    python stride_sweep.py --strides 1 2 4 --folder ../sandbox/chlorbenzol
+
+
+ONE IMPLEMENTATION NOTE
+-----------------------
+
+stride_sweep.py does not reconvert the pointval files for every stride. It
+decimates the full-resolution cube in memory with data[::N, ::N, ::N] and
+scales the voxel vectors by N - which is exactly, line for line, what
+write_cube() does when it is given --stride N. The results are therefore not
+"comparable to" a real stride-N run; they are the same numbers.
+
+The "cubes" column is computed from the cube format rather than measured,
+because writing the stride-1 file only to read off its size would mean 200 MB
+of disk traffic for one table cell. The data part of that formula is exact; the
+header is estimated to within a few bytes, since the comment lines contain the
+source file name. Checked against sandbox/brombenzol/td.cube: 210 865 313 bytes
+predicted, 210 865 313 measured.

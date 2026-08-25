@@ -442,74 +442,6 @@ def write_cube(path, info, data, atoms, stride=1, comment=""):
 
 
 # ----------------------------------------------------------------------------
-# PyMOL-Skript erzeugen
-# ----------------------------------------------------------------------------
-
-PML_TEMPLATE = """# --------------------------------------------------------------
-# esp.pml - ESP auf Elektronendichte-Isoflaeche
-# Erzeugt von xyzToCube.py
-# Start:  pymol esp.pml       (oder in PyMOL:  @esp.pml)
-# --------------------------------------------------------------
-
-reinitialize
-
-# 1) Struktur und Volumendaten laden
-load {struct}, mol
-{load_density}
-load {esp_cube}, esp
-
-# 2) Molekuel als Staebchen
-hide everything
-show sticks, mol
-set stick_radius, 0.12
-color grey70, mol and elem C
-util.cnc mol
-
-# 3) Isoflaeche der Elektronendichte bei rho = {iso} a.u.
-#    (Politzer/Murray-Konvention fuer die "Molekueloberflaeche")
-{isosurface}
-
-# 4) Farbrampe fuer das ESP; Werte in Hartree/e (a.u.)
-#    {vmin} .. {vmax} a.u.  entspricht {kvmin:.0f} .. {kvmax:.0f} kJ/(mol*e)
-ramp_new espramp, esp, [{ramp_levels}], [{ramp_colors}]
-
-# 5) ESP auf die Oberflaeche mappen
-set surface_color, espramp, {surface_target}
-set surface_quality, 1
-
-#    Transparenz: 0 = opak (kraftigste Farben, Staebchen unsichtbar),
-#    0.15 = Standard (Molekuelgeruest scheint durch),
-#    ab ca. 0.3 wird es unleserlich, weil man durch das ganze Molekuel schaut.
-set transparency, {transparency}
-set transparency_mode, 2
-set two_sided_lighting, on
-
-# 6) Darstellung / Rendering
-bg_color white
-set ray_opaque_background, 1
-set antialias, 2
-set ray_trace_mode, 0
-set specular, 0.2
-set ambient, 0.15
-orient mol
-zoom mol, 2.0
-
-# 7) Hochaufloesendes Bild
-# ray 2400, 1800
-# png esp.png, dpi=300
-"""
-
-
-# Farbrampen - identisch zu render_esp.RAMP_PYMOL. Rot bleibt in beiden
-# negativ, blau positiv; der Regenbogen schiebt nur Gelb/Gruen/Cyan dazwischen,
-# damit sich die zwei Bildersaetze nebeneinanderlegen lassen.
-PML_RAMPS = {
-    "redblue": ["red", "white", "blue"],
-    "rainbow": ["red", "yellow", "green", "cyan", "blue"],
-}
-
-
-# ----------------------------------------------------------------------------
 # Schalenauswertung (rho = iso) und Farbskala
 #
 # Gemeinsame Quelle fuer beide Skripte: render_esp.py importiert shell_mask(),
@@ -580,6 +512,73 @@ def auto_esp_range(density, esp, iso=0.001, tol_factor=SHELL_TOL_FACTOR,
     if npts == 0:
         return None
     return nice_range(vmin, vmax, step)
+
+
+# ----------------------------------------------------------------------------
+# PyMOL-Skript erzeugen
+# ----------------------------------------------------------------------------
+
+PML_TEMPLATE = """# --------------------------------------------------------------
+# esp.pml - ESP auf Elektronendichte-Isoflaeche
+# Start:  pymol esp.pml       (oder in PyMOL:  @esp.pml)
+# --------------------------------------------------------------
+
+reinitialize
+
+# 1) Struktur und Volumendaten laden
+load {struct}, mol
+{load_density}
+load {esp_cube}, esp
+
+# 2) Molekuel als Staebchen
+hide everything
+show sticks, mol
+set stick_radius, 0.3
+color grey70, mol and elem C
+util.cnc mol
+
+# 3) Isoflaeche der Elektronendichte bei rho = {iso} a.u.
+#    (Politzer/Murray-Konvention fuer die "Molekueloberflaeche")
+{isosurface}
+
+# 4) Farbrampe fuer das ESP; Werte in Hartree/e (a.u.)
+#    {vmin} .. {vmax} a.u.  entspricht {kvmin:.0f} .. {kvmax:.0f} kJ/(mol*e)
+ramp_new espramp, esp, [{ramp_levels}], [{ramp_colors}]
+
+# 5) ESP auf die Oberflaeche mappen
+set surface_color, espramp, {surface_target}
+set surface_quality, 1
+
+#    Transparenz: 0 = opak (kraftigste Farben, Staebchen unsichtbar),
+#    0.15 = Standard (Molekuelgeruest scheint durch),
+#    ab ca. 0.3 wird es unleserlich, weil man durch das ganze Molekuel schaut.
+set transparency, {transparency}
+set transparency_mode, 2
+set two_sided_lighting, on
+
+# 6) Darstellung / Rendering
+bg_color white
+set ray_opaque_background, 1
+set antialias, 2
+set ray_trace_mode, 0
+set specular, 0.2
+set ambient, 0.15
+orient mol
+zoom mol, 2.0
+
+# 7) Hochaufloesendes Bild
+# ray 2400, 1800
+# png esp.png, dpi=300
+"""
+
+
+# Farbrampen - identisch zu render_esp.RAMP_PYMOL. Rot bleibt in beiden
+# negativ, blau positiv; der Regenbogen schiebt nur Gelb/Gruen/Cyan dazwischen,
+# damit sich die zwei Bildersaetze nebeneinanderlegen lassen.
+PML_RAMPS = {
+    "redblue": ["red", "white", "blue"],
+    "rainbow": ["red", "yellow", "green", "cyan", "blue"],
+}
 
 
 def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
