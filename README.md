@@ -521,7 +521,7 @@ Running this script needs a seperate environment — see `tools/environment-test
 ## 8. Repository layout
 
 ```
-esp_visualization/
+Pymol_esp_visualization/
 ├── README.md                     this document (the user guide)
 ├── environment.yml               conda environment
 ├── .gitignore
