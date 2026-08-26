@@ -11,7 +11,7 @@ onto an electron-density isosurface.
 | Input | Turbomole `pointval` grids (`td.xyz`, `tp.xyz`) + a structure file |
 | Output | Gaussian cube files, a standard set of PNG images, a CSV of surface ESP statistics & a PyMOL Script to visualize the ESP in Pymol|
 | Software | Python 3 + NumPy + PyMOL (open source), all free |
-| Manual steps | none — the whole pipeline is two commands |
+| Manual steps | Installing and establishing a conda environment and firing a command |
 
 <p align="center">
   <img src="results/brombenzol/brombenzol_pi.png" width="32%" alt="pi face">
@@ -22,8 +22,7 @@ onto an electron-density isosurface.
   <img src="results/brombenzol/brombenzol_colorbar.png" width="42%" alt="colour scale">
 </p>
 
-<p align="center"><em>Bromobenzene: π face, view along the C–Br axis
-(σ-hole), in-plane profile, and the colour scale that belongs to them.</em></p>
+<p align="center"><em>Bromobenzene: π face, view along the C–Br axis (σ-hole), in-plane profile, and the colour scale that belongs to them.</em></p>
 
 ---
 
@@ -51,7 +50,7 @@ onto an electron-density isosurface.
 This workflow needs a **functioning conda installation**.
 
 If you have no conda yet, install
-**[Miniforge](https://conda-forge.org/download/)** — it is free, defaults to the
+**[Miniforge](https://conda-forge.org/download/)**. It is free, defaults to the
 conda-forge channel that this workflow uses, and is small. During installation:
 
 | Option | Setting |
@@ -63,8 +62,8 @@ conda-forge channel that this workflow uses, and is small. During installation:
 
 > **Do not rely on a conda that came bundled with another program.** Several
 > chemistry packages (Schrödinger PyMOL among them) ship their own conda inside
-> their installation folder. It may be incomplete or broken, it is not intended
-> to be used as a general package manager, and — worse — VS Code will happily
+> their installation folder. It is incomplete, it is not intended
+> to be used as a general package manager, and VS Code will happily
 > discover it and remember it as "the" conda of the system. You then get
 > `conda.exe is not a valid application for this operating system platform` on
 > every activation, no matter which interpreter you select. See
@@ -92,38 +91,38 @@ else on the machine is disturbed.
 
 ```bash
 conda env create -f environment.yml
-conda activate esp
+conda activate esp-pymol
 ```
 
 | Packages inside the env | Needed for |
 |---|---|
-| `numpy` | everything — grid handling in all three scripts |
+| `numpy` | everything, grid handling in all three scripts |
 | `pymol-open-source` | rendering the images and the interactive scene |
 | `matplotlib` | the separate `*_colorbar.png` only |
 
 
 ### 1.3 Verify & Smoketest
+Vallidate the correct deployment of the conda environment with the following command:
 
 ```bash
 python -c "import pymol, numpy, matplotlib; print('ok')"
 ```
 
-The smoke test is run with the following command:
+The smoke test is run, executing the following python script without any parameters:
 ```bash
 cd scripts
 python run_all.py
 ```
 Without parameters `run_all.py` runs on `reference/brombenzol/`. It converts,
 renders, and writes the images to `reference/brombenzol/images_check/` plus a
-summary in `reference/summary_check.csv` — deliberately separate names, so a
-smoke test can never overwrite the committed reference output.
+summary in `reference/summary_check.csv`
 
 Compare your `images_check/` with the committed `images/` and your
 `summary_check.csv` with `summary.csv`. On the decimated reference grid expect
 V_S,min ≈ −0.0186, V_S,max ≈ +0.0307 and an automatic colour scale of ±0.0350.
 The first two are 1–3 % below the full-resolution values (−0.0188 / +0.0315),
 which is what a five-fold coarser grid costs; the colour scale comes out
-identical. If your numbers match, the installation is sound and you can move on
+identical. If your numbers match, the installation is done and you can move on
 to your own molecules.
 
 ---
@@ -139,7 +138,7 @@ Per molecule, in one folder:
 | `*.mol` / `*.sdf` / `*.xyz` | molecular structure | Å (default) |
 
 **`td.xyz` and `tp.xyz` are not structure files** despite the extension. They are
-ASCII point clouds — one line per grid point, carrying the full coordinates plus
+ASCII point clouds including one line per grid point, carrying the full coordinates plus
 the value:
 
 ```
@@ -150,8 +149,7 @@ the value:
 ```
 
 At 251³ points that is about 1.25 GB per file. The same information as a
-Gaussian cube is roughly 200 MB, because the cube format stores the grid
-implicitly.
+.cube is roughly 200 MB, because the cube format stores the grid implicitly.
 
 ### Accepted structure formats
 
@@ -159,7 +157,7 @@ Both `xyzToCube.py` and `render_esp.py` accept the same three formats:
 
 | Format | Notes |
 |---|---|
-| `.xyz` | `Symbol x y z`. With or without the leading atom-count and comment lines — a bare coordinate list is accepted. Default Å. Can be changed with --struct-unit |
+| `.xyz` | `Symbol x y z`. With or without the leading atom-count and comment lines a bare coordinate list is accepted. Default Å. Can be changed with --struct-unit |
 | `.mol` | MDL molfile, V2000 and V3000. **Coordinates come *before* the element symbol**, the reverse of xyz. Always Å. |
 | `.sdf` | SD-file; only the first record (up to `$$$$`) is read. Always Å. |
 
@@ -172,9 +170,7 @@ proper sticks instead of guessing connectivity from distances.
 **Give both scripts the same structure file.** `xyzToCube.py` writes the atom
 positions into the cube header, `render_esp.py` hands the structure to PyMOL for
 the stick model. If you feed them two different files and those files ever
-disagree — a different conformer, a different atom order — the skeleton will sit
-offset from its own surface, and **nothing will warn you**. One file for both
-removes the failure mode entirely.
+disagree the skeleton will sit offset from its own surface, and **nothing will warn you**. One file for both removes the failure mode entirely.
 
 ---
 
