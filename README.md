@@ -30,15 +30,15 @@ onto an electron-density isosurface.
 
 1. [Installation](#1-installation)
 2. [Input files and formats](#2-input-files-and-formats)
-3. [Step 1 — Convert the grids to cube (`xyzToCube.py`)](#3-step-1--convert-the-grids-to-cube-xyztocubepy)
-4. [Step 2 — Look at it interactively (`esp.pml`)](#4-step-2--look-at-it-interactively-esppml)
-5. [Step 3 — Render the standard image set (`render_esp.py`)](#5-step-3--render-the-standard-image-set-render_esppy)
-6. [Step 4 — Several molecules at once (`run_all.py`)](#6-step-4--several-molecules-at-once-run_allpy)
-7. [What the workflow writes](#7-what-the-workflow-writes)
-8. [Console output and colours](#8-console-output-and-colours)
-9. [Create Tp.xyz, Td.xyz and a structure file from a SMILES notation](#9-create-tp.xyz,-td.xyz,-and-a-structure-file-from-a-smiles-notation)
-10. [Repository layout](#10-repository-layout)
-11. [Troubleshooting](#11-troubleshooting)
+3.1 [Convert the grids to cube (`xyzToCube.py`)](#3.1-convert-the-grids-to-cube-xyztocubepy)
+3.2 [Step 2 — Look at it interactively (`esp.pml`)](#3.2-look-at-it-interactively-esppml)
+3.3 [Step 3 — Render the standard image set (`render_esp.py`)](#3.3-render-the-standard-image-set-render_esppy)
+4. [Several molecules at once (`run_all.py`)](#4-several-molecules-at-once-run_allpy)
+5. [What the workflow writes](#5-what-the-workflow-writes)
+6. [Console output and colours](#6-console-output-and-colours)
+7. [Create Tp.xyz, Td.xyz and a structure file from a SMILES notation](7-create-tp.xyz,-td.xyz,-and-a-structure-file-from-a-smiles-notation)
+8. [Repository layout](#8-repository-layout)
+9. [Troubleshooting](#9-troubleshooting)
 
 ---
 
@@ -173,7 +173,7 @@ disagree the skeleton will sit offset from its own surface, and **nothing will w
 
 ---
 
-## 3. Step 1 — Convert the grids to cube (`xyzToCube.py`)
+## 3.1 Convert the grids to cube (`xyzToCube.py`)
 
 ```bash
 cd scripts
@@ -241,7 +241,7 @@ go wrong:
 
 ---
 
-## 4. Step 2 — Look at it interactively (`esp.pml`)
+## 3.2 Look at it interactively (`esp.pml`)
 
 Before rendering anything, check that structure and grids actually line up (For that the script needs to be executed with the --pymol parameter):
 
@@ -271,7 +271,7 @@ disable espramp         # hide the colour bar
 
 ---
 
-## 5. Step 3 — Render the standard image set (`render_esp.py`)
+## 3.3 Render the standard image set (`render_esp.py`)
 
 ```bash
 cd scripts
@@ -345,7 +345,7 @@ pymol -ckq render_esp.py -- --prefix molecule
 
 ---
 
-## 6. Step 4 — Several molecules at once (`run_all.py`)
+## 4. Several molecules at once (`run_all.py`)
 
 Put each molecule in its own folder under a common root — for your own data that
 is `sandbox/`, which git ignores:
@@ -425,7 +425,7 @@ python run_all.py
 
 ---
 
-## 7. What the workflow writes
+## 5. What the workflow writes
 
 Per molecule folder:
 
@@ -467,7 +467,7 @@ uninterpretable.
 
 ---
 
-## 8. Console output and colours
+## 6. Console output and colours
 
 `render_esp.py` and `run_all.py` print the measured values per molecule, with
 molecule headers in green and halogen symbols in cyan so the relevant lines stand
@@ -506,14 +506,14 @@ NO_COLOR=1 python run_all.py --root ../sandbox
 
 ---
 
-## 9. Create Tp.xyz, Td.xyz and a structure file from a SMILES notation
+## 7. Create Tp.xyz, Td.xyz and a structure file from a SMILES notation
 
 In order to create your own files to test the application with your own molecules, a script  is provided within the /tools folder:
 `tools/CreateTpTdFromSmiles.py`.
 
 Running this script needs a seperate environment — see `tools/environment-testdata.yml` and all infos about it can be found in the `tools/README.txt`.
 
-## 10. Repository layout
+## 8. Repository layout
 
 ```
 esp_visualization/
@@ -590,7 +590,7 @@ versions drift apart.
 
 ---
 
-## 11. Troubleshooting
+## 9. Troubleshooting
 
 **`ContourSurfVolume: VTKm not available, falling back to internal implementation`**
 Harmless, and it appears on every run. VTK-m is an optional parallel contouring
