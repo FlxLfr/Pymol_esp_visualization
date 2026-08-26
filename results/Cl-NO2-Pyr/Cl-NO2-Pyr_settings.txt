@@ -1,0 +1,19 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : ..\sandbox\Cl-NO2-Pyr\S12_Cl-NO2-Pyr_OPTI.xyz
+Dichte-Cube       : ..\sandbox\Cl-NO2-Pyr\td.cube
+ESP-Cube          : ..\sandbox\Cl-NO2-Pyr\tp.cube
+Gitter            : 251 x 251 x 251
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.04545 a.u. (-28.52 kcal/(mol*e))  auf O8
+V_S,max           : +0.05825 a.u. (+36.55 kcal/(mol*e))  auf H12
+sigma-Loch (Cl10) : +0.02508 a.u. (+15.74 kcal/(mol*e))  [interpoliert]
+Guertel    (Cl10) : -0.03091 a.u. (-19.39 kcal/(mol*e))
+Gitterabstand     : 0.1600 Bohr
+Farbskala         : -0.0600 .. +0.0600 a.u. (automatisch aus den Daten)
+Farbrampe         : rot-weiss-blau
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma

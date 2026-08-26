@@ -1,0 +1,17 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : ..\sandbox\Me-Pyr\S12_Me-Pyr_OPTI.xyz
+Dichte-Cube       : ..\sandbox\Me-Pyr\td.cube
+ESP-Cube          : ..\sandbox\Me-Pyr\tp.cube
+Gitter            : 251 x 251 x 251
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.06779 a.u. (-42.54 kcal/(mol*e))  auf N10
+V_S,max           : +0.03647 a.u. (+22.89 kcal/(mol*e))  auf H12
+Gitterabstand     : 0.1600 Bohr
+Farbskala         : -0.0700 .. +0.0700 a.u. (automatisch aus den Daten)
+Farbrampe         : rot-weiss-blau
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma

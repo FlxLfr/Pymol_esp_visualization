@@ -1,0 +1,19 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : C:\Users\felix\Desktop\Master\2. Semester\FrontiersOfAppliedDD\Projekt\Pymol_esp_visualization\reference\brombenzol\brombenzol_aro_opti.mol
+Dichte-Cube       : C:\Users\felix\Desktop\Master\2. Semester\FrontiersOfAppliedDD\Projekt\Pymol_esp_visualization\reference\brombenzol\td.cube
+ESP-Cube          : C:\Users\felix\Desktop\Master\2. Semester\FrontiersOfAppliedDD\Projekt\Pymol_esp_visualization\reference\brombenzol\tp.cube
+Gitter            : 32 x 37 x 24
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.01863 a.u. (-11.69 kcal/(mol*e))  auf Br12
+V_S,max           : +0.03070 a.u. (+19.26 kcal/(mol*e))  auf H9
+sigma-Loch (Br12) : +0.01528 a.u. (+9.59 kcal/(mol*e))  [interpoliert]
+Guertel    (Br12) : -0.01863 a.u. (-11.69 kcal/(mol*e))
+Gitterabstand     : 0.6000 Bohr
+Farbskala         : -0.0350 .. +0.0350 a.u. (automatisch aus den Daten)
+Farbrampe         : rot-weiss-blau
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma

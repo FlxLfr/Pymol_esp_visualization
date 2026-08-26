@@ -1,0 +1,17 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : ..\sandbox\NO2-Pyr\S12_NO2-Pyr_OPTI.xyz
+Dichte-Cube       : ..\sandbox\NO2-Pyr\td.cube
+ESP-Cube          : ..\sandbox\NO2-Pyr\tp.cube
+Gitter            : 251 x 251 x 251
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.04712 a.u. (-29.57 kcal/(mol*e))  auf N2
+V_S,max           : +0.04487 a.u. (+28.16 kcal/(mol*e))  auf H12
+Gitterabstand     : 0.1600 Bohr
+Farbskala         : -0.0500 .. +0.0500 a.u. (automatisch aus den Daten)
+Farbrampe         : rot-weiss-blau
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma

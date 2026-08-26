@@ -14,15 +14,15 @@ onto an electron-density isosurface.
 | Manual steps | none — the whole pipeline is two commands |
 
 <p align="center">
-  <img src="reference/4-bromacetophenon/images/4-bromacetophenon_pi.png" width="32%" alt="pi face">
-  <img src="reference/4-bromacetophenon/images/4-bromacetophenon_sigma.png" width="32%" alt="sigma hole">
-  <img src="reference/4-bromacetophenon/images/4-bromacetophenon_edge.png" width="32%" alt="in-plane profile">
+  <img src="results/brombenzol/brombenzol_pi.png" width="32%" alt="pi face">
+  <img src="results/brombenzol/brombenzol_sigma.png" width="32%" alt="sigma hole">
+  <img src="results/brombenzol/brombenzol_edge.png" width="32%" alt="in-plane profile">
 </p>
 <p align="center">
-  <img src="reference/4-bromacetophenon/images/4-bromacetophenon_colorbar.png" width="42%" alt="colour scale">
+  <img src="results/brombenzol/brombenzol_colorbar.png" width="42%" alt="colour scale">
 </p>
 
-<p align="center"><em>4-Bromoacetophenone: π face, view along the C–Br axis
+<p align="center"><em>Bromobenzene: π face, view along the C–Br axis
 (σ-hole), in-plane profile, and the colour scale that belongs to them.</em></p>
 
 > **This document is the operating manual only** — installation, execution,
@@ -119,8 +119,18 @@ The smoke test is run with the following command:
 cd scripts
 python run_all.py
 ```
-Running the (run_all.py) script without parameters results in the script using the `/reference/4-bromacetophenon` directory. It converts, renders and saves the images to: `reference/4-bromacetophenon/images_check/` and concludes a summary in the `reference/summary_check.csv`.
-The summary and images can now be compared with the initial downloaded images and the script. When the results are the same, you can contninue with the visualization of your own molecular files 
+Without parameters `run_all.py` runs on `reference/brombenzol/`. It converts,
+renders, and writes the images to `reference/brombenzol/images_check/` plus a
+summary in `reference/summary_check.csv` — deliberately separate names, so a
+smoke test can never overwrite the committed reference output.
+
+Compare your `images_check/` with the committed `images/` and your
+`summary_check.csv` with `summary.csv`. On the decimated reference grid expect
+V_S,min ≈ −0.0186, V_S,max ≈ +0.0307 and an automatic colour scale of ±0.0350.
+The first two are 1–3 % below the full-resolution values (−0.0188 / +0.0315),
+which is what a five-fold coarser grid costs; the colour scale comes out
+identical. If your numbers match, the installation is sound and you can move on
+to your own molecules.
 
 ---
 
@@ -374,7 +384,7 @@ arguments** it runs on `reference/` instead — the smoke test from §1.3.
 | Option | Default | Effect |
 |---|---|---|
 | `--root` | `reference/` | directory tree to search for molecule folders |
-| `--only NAME …` | all | restrict the run to these folders; simple wildcards allowed, e.g. `--only paracetamol '*benzol'` |
+| `--only NAME …` | all | restrict the run to these folders; simple wildcards allowed, e.g. `--only Pyridine '*-Pyr'` |
 | `--stride N` | `1` (full resolution) | grid decimation **during conversion**. Ignored when the cube files already exist — use `--force-convert` to rebuild them. |
 | `--struct-unit {angstrom,bohr}` | `angstrom` | as in `xyzToCube.py`; `.xyz` only |
 | `--force-convert` | off | rewrite cube files even if they already exist |
@@ -402,17 +412,17 @@ python run_all.py --root ../sandbox --two-pass
 python run_all.py --root ../sandbox --two-pass --stride 2
 
 # pick individual molecules out of a larger root
-python run_all.py --root ../sandbox --only paracetamol chlormethan --two-pass
+python run_all.py --root ../sandbox --only Pyridine Me-Pyr --two-pass
 python run_all.py --root ../sandbox --only "*benzol"
 
 # rebuild cube files that already exist, at full resolution
 python run_all.py --root ../sandbox --force-convert
 
 # re-render a few molecules with the current script version
-python run_all.py --root ../sandbox --only chlorbenzol chlormethan iodbenzol
+python run_all.py --root ../sandbox --only chlorbenzol brombenzol iodbenzol
 
 # fixed scale for everything, summary elsewhere
-python run_all.py --root ../sandbox --esp-range 0.035 --summary ../results/summary.csv
+python run_all.py --root ../sandbox --esp-range 0.070 --summary ../results/summary.csv
 
 # installation check on the reference data
 python run_all.py
@@ -529,26 +539,31 @@ esp_visualization/
 │   └── ansi.py                   console colours (no dependencies)
 ├── reference/                    known-good example — output, not input
 │   ├── summary.csv
-│   └── 4-bromacetophenon/
-│       ├── 4-bromacetophenon.mol
-│       ├── td.xyz                raw pointval grids, decimated to 0.75 Bohr
-│       ├── tp.xyz
-│       └── images/               reference images (rendered at 114×86×80)
-├── results/                      the delivered image sets
-│   ├── chlorbenzol/  brombenzol/  iodbenzol/       provided Turbomole data
-│   ├── chlormethan/  4-bromacetophenon/
-│   ├── paracetamol/  halcion/                      generated test data
+│   └── brombenzol/
+│       ├── brombenzol_aro_opti.mol
+│       ├── td.xyz                raw pointval grids, decimated to 0.60 Bohr
+│       ├── tp.xyz                (32×37×24, 1.7 MB each)
+│       └── images/               reference images
+├── results/                      the delivered image sets — nine molecules
+│   ├── Pyridine/  Me-Pyr/  CN-Pyr/  NO2-Pyr/       pyridines, provided
+│   ├── I-Pyr/  Cl-NO2-Pyr/                          Turbomole data
+│   ├── chlorbenzol/  brombenzol/  iodbenzol/       halobenzenes, provided
 │   └── <molecule>/               *_pi.png  *_edge.png  *_sigma.png
 │                                 *_colorbar.png  *_settings.txt
-├── tools/                        test-data generator (own environment)
+├── tools/                        helper scripts (own environment)
+│   ├── CreateTpTdFromSmiles.py   test data from a SMILES string
+│   ├── make_reference.py         decimated reference set from a full folder
+│   ├── iso_sweep.py              parameter study, isovalue
+│   └── stride_sweep.py           parameter study, grid resolution
 ├── docs/                         background document (method, results, refs)
 └── sandbox/                      your own data and experiments, not tracked
 ```
 
-**`results/` is committed, `sandbox/` is not.** The images in `results/` are the
-deliverable and are small enough to track (PNG + text, a few hundred KB each);
-the cube files and pointval grids they were made from stay in `sandbox/` and are
-ignored. Each result folder carries its own `*_settings.txt`, so an image never
+**`results/` is committed, `sandbox/` is not.** It holds the nine molecules of
+the current set — six pyridines and three halobenzenes, all from Turbomole data
+provided by the supervisor. The images are the deliverable and are small enough
+to track (PNG + text, a few hundred KB each); the cube files and pointval grids
+they were made from stay in `sandbox/` and are ignored. Each result folder carries its own `*_settings.txt`, so an image never
 travels without the parameters that produced it.
 
 **`reference/` and `sandbox/` do different jobs.** `reference/` holds a
@@ -565,10 +580,21 @@ GitHub rejects anything above 100 MB. Regenerate them from the raw data with
 `xyzToCube.py`.
 
 The reference dataset is the exception and ships as raw `pointval` files rather
-than cubes, so the smoke test exercises `xyzToCube.py` as well. Its grids are
-decimated to 0.75 Bohr (~2.3 MB each), which is too coarse for a σ-hole value —
-use it to confirm the pipeline runs, not to read numbers off. The script says so
-itself.
+than cubes, so the smoke test exercises `xyzToCube.py` as well — unit conversion
+and index reordering are the steps most likely to break, and a set of ready-made
+cubes would skip exactly those. Its grids are decimated to 0.60 Bohr (~1.7 MB
+each), five times coarser than the delivered bromobenzene data, which is too
+coarse for a σ-hole value you would quote — use it to confirm the pipeline runs,
+not to read numbers off. The script says so itself.
+
+Rebuild it, or make one for another molecule, with:
+
+```bash
+python tools/make_reference.py sandbox/brombenzol --name brombenzol
+```
+
+It crops to the bounding box of the ρ > iso/2 region plus a margin, so the whole
+isosurface stays inside the grid, and then keeps every n-th point (`--stride`).
 
 Do not keep a second copy of the scripts elsewhere — that is exactly how two
 versions drift apart.

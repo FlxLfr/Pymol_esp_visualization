@@ -1,0 +1,17 @@
+Renderparameter (erzeugt von render_esp.py)
+=======================================================
+Struktur          : ..\sandbox\Pyridine\S12_Pyridine_OPTI.xyz
+Dichte-Cube       : ..\sandbox\Pyridine\td.cube
+ESP-Cube          : ..\sandbox\Pyridine\tp.cube
+Gitter            : 251 x 251 x 251
+Isowert rho       : 0.001 a.u.
+V_S,min           : -0.06500 a.u. (-40.79 kcal/(mol*e))  auf N7
+V_S,max           : +0.03959 a.u. (+24.84 kcal/(mol*e))  auf H6
+Gitterabstand     : 0.1600 Bohr
+Farbskala         : -0.0700 .. +0.0700 a.u. (automatisch aus den Daten)
+Farbrampe         : rot-weiss-blau
+Transparenz       : 0.15
+Hintergrund       : white
+Bildgroesse       : 2000 x 1600 px, 300 dpi
+Projektion        : orthoskopisch
+Ansichten         : pi, edge, sigma
