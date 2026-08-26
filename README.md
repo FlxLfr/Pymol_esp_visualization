@@ -1,12 +1,12 @@
 # ESP Visualization
 
-**User Guide — How to Run the ESP Visualization Workflow**
+**User Guide for deploying the PyMol ESP Visualization Tool**
 
 A reproducible, scriptable workflow that turns Turbomole `pointval` output into
 publication-quality images of the molecular electrostatic potential (ESP) mapped
 onto an electron-density isosurface.
 
-| | |
+|Aspect |Details |
 |---|---|
 | Input | Turbomole `pointval` grids (`td.xyz`, `tp.xyz`) + a structure file |
 | Output | Gaussian cube files, a standard set of PNG images, a CSV of surface ESP statistics & a PyMOL Script to visualize the ESP in Pymol|
@@ -24,13 +24,6 @@ onto an electron-density isosurface.
 
 <p align="center"><em>Bromobenzene: π face, view along the C–Br axis
 (σ-hole), in-plane profile, and the colour scale that belongs to them.</em></p>
-
-> **This document is the operating manual only** — installation, execution,
-> every parameter, example commands. The background it used to carry (why the
-> ρ = 0.001 surface, which number describes the σ-hole, the parameter study, the
-> measured results and the references) is in
-> **[`docs/ESP_Visualization_Background.docx`](docs/ESP_Visualization_Background.docx)**.
-> Read that document before interpreting any number this workflow produces.
 
 ---
 
