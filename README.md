@@ -553,46 +553,6 @@ esp_visualization/
 └── sandbox/                      your own data and experiments, not tracked
 ```
 
-**`results/` is committed, `sandbox/` is not.** It holds the nine molecules of
-the current set — six pyridines and three halobenzenes, all from Turbomole data
-provided by the supervisor. The images are the deliverable and are small enough
-to track (PNG + text, a few hundred KB each); the cube files and pointval grids
-they were made from stay in `sandbox/` and are ignored. Each result folder carries its own `*_settings.txt`, so an image never
-travels without the parameters that produced it.
-
-**`reference/` and `sandbox/` do different jobs.** `reference/` holds a
-known-good example: the images this workflow is supposed to produce, the
-parameters that produced them, and a small decimated dataset to reproduce them
-with. It is committed, and you do not edit it. `sandbox/` is where your own
-molecules and the large raw data live; git ignores it entirely. If a run goes
-wrong, `reference/` tells you whether the problem is your installation or your
-data.
-
-**Large files are deliberately not tracked.** `.gitignore` excludes `*.cube` and
-the Turbomole `td.xyz`/`tp.xyz` grids — a full-resolution cube is 201 MB and
-GitHub rejects anything above 100 MB. Regenerate them from the raw data with
-`xyzToCube.py`.
-
-The reference dataset is the exception and ships as raw `pointval` files rather
-than cubes, so the smoke test exercises `xyzToCube.py` as well — unit conversion
-and index reordering are the steps most likely to break, and a set of ready-made
-cubes would skip exactly those. Its grids are decimated to 0.60 Bohr (~1.7 MB
-each), five times coarser than the delivered bromobenzene data, which is too
-coarse for a σ-hole value you would quote — use it to confirm the pipeline runs,
-not to read numbers off. The script says so itself.
-
-Rebuild it, or make one for another molecule, with:
-
-```bash
-python tools/make_reference.py sandbox/brombenzol --name brombenzol
-```
-
-It crops to the bounding box of the ρ > iso/2 region plus a margin, so the whole
-isosurface stays inside the grid, and then keeps every n-th point (`--stride`).
-
-Do not keep a second copy of the scripts elsewhere — that is exactly how two
-versions drift apart.
-
 ---
 
 ## 9. Troubleshooting
