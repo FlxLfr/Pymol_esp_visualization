@@ -11,7 +11,7 @@ onto an electron-density isosurface.
 | Input | Turbomole `pointval` grids (`td.xyz`, `tp.xyz`) + a structure file |
 | Output | Gaussian cube files, a standard set of PNG images, a CSV of surface ESP statistics & a PyMOL Script to visualize the ESP in Pymol|
 | Software | Python 3 + NumPy + PyMOL (open source), all free |
-| Manual steps | none — the whole pipeline is two commands |
+| Manual steps | Installing and establishing a conda environment and firing a command |
 
 <p align="center">
   <img src="results/brombenzol/brombenzol_pi.png" width="32%" alt="pi face">
@@ -22,8 +22,7 @@ onto an electron-density isosurface.
   <img src="results/brombenzol/brombenzol_colorbar.png" width="42%" alt="colour scale">
 </p>
 
-<p align="center"><em>Bromobenzene: π face, view along the C–Br axis
-(σ-hole), in-plane profile, and the colour scale that belongs to them.</em></p>
+<p align="center"><em>Bromobenzene: π face, view along the C–Br axis (σ-hole), in-plane profile, and the colour scale that belongs to them.</em></p>
 
 ---
 
@@ -50,7 +49,7 @@ onto an electron-density isosurface.
 This workflow needs a **functioning conda installation**.
 
 If you have no conda yet, install
-**[Miniforge](https://conda-forge.org/download/)** — it is free, defaults to the
+**[Miniforge](https://conda-forge.org/download/)**. It is free, defaults to the
 conda-forge channel that this workflow uses, and is small. During installation:
 
 | Option | Setting |
@@ -62,8 +61,8 @@ conda-forge channel that this workflow uses, and is small. During installation:
 
 > **Do not rely on a conda that came bundled with another program.** Several
 > chemistry packages (Schrödinger PyMOL among them) ship their own conda inside
-> their installation folder. It may be incomplete or broken, it is not intended
-> to be used as a general package manager, and — worse — VS Code will happily
+> their installation folder. It is incomplete, it is not intended
+> to be used as a general package manager, and VS Code will happily
 > discover it and remember it as "the" conda of the system. You then get
 > `conda.exe is not a valid application for this operating system platform` on
 > every activation, no matter which interpreter you select. See
@@ -91,17 +90,18 @@ else on the machine is disturbed.
 
 ```bash
 conda env create -f environment.yml
-conda activate esp
+conda activate esp-pymol
 ```
 
 | Packages inside the env | Needed for |
 |---|---|
-| `numpy` | everything — grid handling in all three scripts |
+| `numpy` | everything, grid handling in all three scripts |
 | `pymol-open-source` | rendering the images and the interactive scene |
 | `matplotlib` | the separate `*_colorbar.png` only |
 
 
 ### 1.3 Verify & Smoketest
+Vallidate the correct deployment of the conda environment
 
 ```bash
 python -c "import pymol, numpy, matplotlib; print('ok')"
