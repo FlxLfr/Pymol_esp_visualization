@@ -400,6 +400,20 @@ HALOGENS = {9: "F", 17: "Cl", 35: "Br", 53: "I"}
 # rot-weiss-blau die ehrlichere Darstellung.
 # ----------------------------------------------------------------------------
 
+# Rand um das Molekuel beim Bildausschnitt, in Angstrom.
+#
+# Gezoomt wird auf die ATOME, nicht auf die Isoflaeche: das Flaechenobjekt
+# traegt die Ausdehnung der ganzen Gitterbox mit sich und liesse das Molekuel
+# als Briefmarke in der Bildmitte erscheinen. Der Platz, den die Flaeche
+# ueber die Kerne hinaus braucht, muss deshalb hier dazukommen - die
+# rho = 0.001-Flaeche liegt rund 1.7 bis 2.1 Angstrom ausserhalb der
+# aeussersten Kerne, 2.4 deckt das mit einem schmalen Rand ab.
+#
+# Frueher eine Option (--buffer). Herausgenommen, weil kein gemessener Wert
+# davon abhaengt und ein anderer Rand nur einen Bildersatz erzeugt, der sich
+# mit den uebrigen nicht mehr nebeneinanderlegen laesst.
+BUFFER_ANGSTROM = 2.4
+
 RAMP_PYMOL = {
     "redblue": ["red", "white", "blue"],
     "rainbow": ["red", "yellow", "green", "cyan", "blue"],
@@ -663,9 +677,6 @@ def render_all(args):
               f"{tilt:.0f} Grad aus der Ausgleichsebene heraus;")
         print(f"    sigma-Ansicht folgt der echten Bindungsachse, "
               f"pi/edge der Ebene.")
-    if args.views:
-        views = {k: v for k, v in views.items() if k in args.views}
-
     # --- PyMOL-Szene ----------------------------------------------------
     cmd.reinitialize()
     cmd.set("auto_zoom", 0)
@@ -713,7 +724,7 @@ def render_all(args):
             # Auf das Molekuel zoomen, NICHT auf "surf": das Isoflaechen-
             # Objekt traegt die Ausdehnung der gesamten Gitterbox mit sich
             # und wuerde das Motiv winzig erscheinen lassen.
-            cmd.zoom("mol", args.buffer)
+            cmd.zoom("mol", BUFFER_ANGSTROM)
 
             suffix = f"_{bg}" if len(args.backgrounds) > 1 else ""
             png = os.path.join(outdir, f"{args.prefix}{cmap_tag}_{name}{suffix}.png")
@@ -870,14 +881,9 @@ def main(argv):
                         "das ganze Molekuel hindurchschaut.")
     p.add_argument("--backgrounds", nargs="+", default=["white"],
                    help="Hintergrundfarben, z.B. white black")
-    p.add_argument("--views", nargs="+", default=None,
-                   choices=["pi", "edge", "sigma"],
-                   help="Teilmenge der Ansichten (Standard: alle drei)")
     p.add_argument("--width", type=int, default=2000)
     p.add_argument("--height", type=int, default=1600)
     p.add_argument("--dpi", type=int, default=300)
-    p.add_argument("--buffer", type=float, default=2.4,
-                   help="Rand um das Molekuel in Angstrom")
     p.add_argument("--rainbow", action="store_true",
                    help="Regenbogen-Farbrampe statt rot-weiss-blau. Rot bleibt "
                         "negativ, blau positiv; Gelb/Gruen/Cyan liegen "

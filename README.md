@@ -311,11 +311,9 @@ Every molecule therefore lands in the same orientation automatically — that is
 | `--esp-range` | `auto` | `auto`, or a fixed half-width in a.u. such as `0.035`. Visual only; no computed value depends on it. |
 | `--transparency` | `0.15` | 0…1. `0` = opaque and strongest colours; above ~0.3 the profile views become unreadable. |
 | `--backgrounds` | `white` | one or more background colours, e.g. `--backgrounds white black` renders each view twice. |
-| `--views` | all three | subset of `pi`, `edge`, `sigma`, e.g. `--views pi sigma`. |
 | `--width` | `2000` | image width in px |
 | `--height` | `1600` | image height in px |
 | `--dpi` | `300` | dpi written into the PNG |
-| `--buffer` | `2.4` | margin around the molecule, Å |
 | `--rainbow` | off | rainbow ramp; writes a separate `<prefix>_rainbow_*` set, so the standard set survives. |
 | `--no-color` | off | plain console output without ANSI colours. |
 
@@ -329,8 +327,8 @@ cd ../sandbox/brombenzol && python ../../scripts/render_esp.py
 python render_esp.py --density td.cube --esp tp.cube --struct mol.mol \
                      --prefix brombenzol --esp-range 0.035
 
-# only the sigma view, opaque, on both backgrounds
-python render_esp.py --views sigma --transparency 0 --backgrounds white black
+# opaque, on both backgrounds
+python render_esp.py --transparency 0 --backgrounds white black
 
 # larger figure for a poster
 python render_esp.py --width 4000 --height 3200 --dpi 600
@@ -391,7 +389,6 @@ arguments** it runs on `reference/` instead — the smoke test from §1.3.
 | `--width` | `2000` | passed through |
 | `--height` | `1600` | passed through |
 | `--dpi` | `300` | passed through |
-| `--buffer` | `2.4` | passed through |
 | `--images-dir` | `images` (`images_check` for the built-in reference run) | name of the output folder inside each molecule folder |
 | `--summary` | `<root>/summary.csv` | path of the CSV summary |
 | `--no-color` | off | plain console output without ANSI colours |

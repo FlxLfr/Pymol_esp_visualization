@@ -188,7 +188,7 @@ def write_scene(entry, cubes, esp_range, iso, transparency,
 
 
 def render(entry, cubes, esp_range, iso, transparency, backgrounds,
-           width, height, dpi, buffer, prefix=None, images_dir="images",
+           width, height, dpi, prefix=None, images_dir="images",
            rainbow=False):
     folder = entry["dir"]
     args = types.SimpleNamespace(
@@ -201,11 +201,9 @@ def render(entry, cubes, esp_range, iso, transparency, backgrounds,
         esp_range=esp_range,
         transparency=transparency,
         backgrounds=backgrounds,
-        views=None,
         width=width,
         height=height,
         dpi=dpi,
-        buffer=buffer,
         rainbow=rainbow,
     )
     return render_esp.render_all(args)
@@ -309,7 +307,6 @@ def main(argv=None):
     p.add_argument("--width", type=int, default=2000)
     p.add_argument("--height", type=int, default=1600)
     p.add_argument("--dpi", type=int, default=300)
-    p.add_argument("--buffer", type=float, default=2.4)
     p.add_argument("--images-dir", default=None,
                    help="name of the output folder inside each molecule "
                         "folder (default: 'images', or 'images_check' when "
@@ -371,7 +368,7 @@ def main(argv=None):
         cubes = convert(e, args.stride, args.struct_unit, args.force_convert)
         res = render(e, cubes, args.esp_range, args.iso, args.transparency,
                      args.backgrounds, args.width, args.height, args.dpi,
-                     args.buffer, images_dir=args.images_dir,
+                     images_dir=args.images_dir,
                      rainbow=args.rainbow)
         pml = write_scene(e, cubes, res["esp_range"], args.iso,
                           args.transparency, filename=pml_name,
@@ -391,7 +388,7 @@ def main(argv=None):
             cubes = convert(e, args.stride, args.struct_unit, force=False)
             res = render(e, cubes, common, args.iso, args.transparency,
                          args.backgrounds, args.width, args.height, args.dpi,
-                         args.buffer, images_dir=args.images_dir,
+                         images_dir=args.images_dir,
                          rainbow=args.rainbow)
             pml = write_scene(e, cubes, common, args.iso, args.transparency,
                               filename=pml_name, rainbow=args.rainbow)
