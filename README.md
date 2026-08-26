@@ -31,15 +31,16 @@ onto an electron-density isosurface.
 
 1. [Installation](#1-installation)
 2. [Input files and formats](#2-input-files-and-formats)
-3. [Step 1 — Convert the grids to cube (`xyzToCube.py`)](#3-step-1--convert-the-grids-to-cube-xyztocubepy)
-4. [Step 2 — Look at it interactively (`esp.pml`)](#4-step-2--look-at-it-interactively-esppml)
-5. [Step 3 — Render the standard image set (`render_esp.py`)](#5-step-3--render-the-standard-image-set-render_esppy)
-6. [Step 4 — Several molecules at once (`run_all.py`)](#6-step-4--several-molecules-at-once-run_allpy)
-7. [What the workflow writes](#7-what-the-workflow-writes)
-8. [Console output and colours](#8-console-output-and-colours)
-9. [Create Tp.xyz, Td.xyz and a structure file from a SMILES notation](#9-create-tp.xyz,-td.xyz,-and-a-structure-file-from-a-smiles-notation)
-10. [Repository layout](#10-repository-layout)
-11. [Troubleshooting](#11-troubleshooting)
+3. [One molecule, step by step](#3-one-molecule-step-by-step)
+    - [3.1 Convert the grids to cubes and create the PyMOL script (`xyzToCube.py`)](#31-convert-the-grids-to-cubes-and-create-the-pymol-script-xyztocubepy)
+    - [3.2 Look at it interactively (`esp.pml`)](#32-look-at-it-interactively-esppml)
+    - [3.3 Render the standard image set (`render_esp.py`)](#33-render-the-standard-image-set-render_esppy)
+4. [Several molecules at once (`run_all.py`)](#4-several-molecules-at-once-run_allpy)
+5. [What the workflow writes](#5-what-the-workflow-writes)
+6. [Console output and colours](#6-console-output-and-colours)
+7. [Create Tp.xyz, Td.xyz and a structure file from a SMILES notation](#7-create-tpxyz-tdxyz-and-a-structure-file-from-a-smiles-notation)
+8. [Repository layout](#8-repository-layout)
+9. [Troubleshooting](#9-troubleshooting)
 
 ---
 
@@ -67,7 +68,7 @@ conda-forge channel that this workflow uses, and is small. During installation:
 > discover it and remember it as "the" conda of the system. You then get
 > `conda.exe is not a valid application for this operating system platform` on
 > every activation, no matter which interpreter you select. See
-> [Troubleshooting](#11-troubleshooting) for how to get out of that.
+> [Troubleshooting](#9-troubleshooting) for how to get out of that.
 
 Verify that conda works *before* going further:
 
@@ -177,7 +178,11 @@ removes the failure mode entirely.
 
 ---
 
-## 3. Step 1 — Convert the grids to cube (`xyzToCube.py`)
+## 3. One molecule, step by step
+
+The three commands below are one molecule's full path from Turbomole output to finished images. For a whole folder of molecules, skip to §4.
+
+### 3.1 Convert the grids to cubes and create the PyMOL script (`xyzToCube.py`)
 
 ```bash
 cd scripts
@@ -186,13 +191,13 @@ python xyzToCube.py --struct ../path/to/molecule.mol ../path/to/td.xyz ../path/t
 
 Writes `td.cube`, `tp.cube` and with `--pymol` a ready-to-use `esp.pml` PyMOL script is created next to the input files. Which .xyz grid is density and which is potential is detected from the file header, not from the file name.
 
-### Positional argument
+#### Positional argument
 
 | Argument | Meaning |
 |---|---|
 | `grids` | one or more Turbomole `pointval` files, e.g. `td.xyz tp.xyz`. Any number can be given; each produces one `.cube` next to it (or in `--outdir`). |
 
-### Options that change the **cube files**
+#### Options that change the **cube files**
 
 | Option | Default | Effect |
 |---|---|---|
@@ -202,7 +207,7 @@ Writes `td.cube`, `tp.cube` and with `--pymol` a ready-to-use `esp.pml` PyMOL sc
 | `--stride N` | `1` | keep every N-th grid point per axis. `2` → **8× smaller** files. |
 | `--quiet`, `-q` | off | suppress progress output. |
 
-### Options that change only the generated `esp.pml`
+#### Options that change only the generated `esp.pml`
 
 They do nothing without `--pymol`, which is why `--help` lists them in their own group.
 
@@ -214,7 +219,7 @@ They do nothing without `--pymol`, which is why `--help` lists them in their own
 | `--transparency` | `0.15` | surface transparency, 0…1. `0` = opaque. |
 | `--rainbow` | off | rainbow ramp in the scene instead of red–white–blue; writes `esp_rainbow.pml` so the standard scene survives. |
 
-### Examples
+#### Examples
 
 ```bash
 # standard: cubes + interactive scene
@@ -245,7 +250,7 @@ go wrong:
 
 ---
 
-## 4. Step 2 — Look at it interactively (`esp.pml`)
+### 3.2 Look at it interactively (`esp.pml`)
 
 Before rendering anything, check that structure and grids actually line up (For that the script needs to be executed with the --pymol parameter):
 
@@ -275,7 +280,7 @@ disable espramp         # hide the colour bar
 
 ---
 
-## 5. Step 3 — Render the standard image set (`render_esp.py`)
+### 3.3 Render the standard image set (`render_esp.py`)
 
 ```bash
 cd scripts
@@ -297,7 +302,7 @@ PyMOL's `orient`:
 
 Every molecule therefore lands in the same orientation automatically — that is what makes an image set comparable, and it is why no manual rotation is needed or wanted. For molecules without a halogen, `*_sigma.png` looks down the longest principal axis instead; read the file name as "axial view" in that case.
 
-### Options
+#### Options
 
 | Option | Default | Effect |
 |---|---|---|
@@ -318,7 +323,7 @@ Every molecule therefore lands in the same orientation automatically — that is
 | `--rainbow` | off | rainbow ramp; writes a separate `<prefix>_rainbow_*` set, so the standard set survives. |
 | `--no-color` | off | plain console output without ANSI colours. |
 
-### Examples
+#### Examples
 
 ```bash
 # everything autodetected in the current molecule folder
@@ -349,7 +354,7 @@ pymol -ckq render_esp.py -- --prefix molecule
 
 ---
 
-## 6. Step 4 — Several molecules at once (`run_all.py`)
+## 4. Several molecules at once (`run_all.py`)
 
 Put each molecule in its own folder under a common root — for your own data that
 is `sandbox/`, which git ignores:
@@ -429,7 +434,7 @@ python run_all.py
 
 ---
 
-## 7. What the workflow writes
+## 5. What the workflow writes
 
 Per molecule folder:
 
@@ -471,7 +476,7 @@ uninterpretable.
 
 ---
 
-## 8. Console output and colours
+## 6. Console output and colours
 
 `render_esp.py` and `run_all.py` print the measured values per molecule, with
 molecule headers in green and halogen symbols in cyan so the relevant lines stand
@@ -510,14 +515,14 @@ NO_COLOR=1 python run_all.py --root ../sandbox
 
 ---
 
-## 9. Create Tp.xyz, Td.xyz and a structure file from a SMILES notation
+## 7. Create Tp.xyz, Td.xyz and a structure file from a SMILES notation
 
 In order to create your own files to test the application with your own molecules, a script  is provided within the /tools folder:
 `tools/CreateTpTdFromSmiles.py`.
 
 Running this script needs a seperate environment — see `tools/environment-testdata.yml` and all infos about it can be found in the `tools/README.txt`.
 
-## 10. Repository layout
+## 8. Repository layout
 
 ```
 esp_visualization/
@@ -594,7 +599,7 @@ versions drift apart.
 
 ---
 
-## 11. Troubleshooting
+## 9. Troubleshooting
 
 **`ContourSurfVolume: VTKm not available, falling back to internal implementation`**
 Harmless, and it appears on every run. VTK-m is an optional parallel contouring
