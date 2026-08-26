@@ -6,7 +6,7 @@ A reproducible, scriptable workflow that turns Turbomole `pointval` output into
 publication-quality images of the molecular electrostatic potential (ESP) mapped
 onto an electron-density isosurface.
 
-| | |
+|Aspect |Details |
 |---|---|
 | Input | Turbomole `pointval` grids (`td.xyz`, `tp.xyz`) + a structure file |
 | Output | Gaussian cube files, a standard set of PNG images, a CSV of surface ESP statistics & a PyMOL Script to visualize the ESP in Pymol|
