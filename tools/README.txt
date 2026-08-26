@@ -54,7 +54,7 @@ On Windows, use WSL (Windows Subsystem for Linux):
        Open a new shell afterwards.
 
     3. Your Windows files are mounted under /mnt/c, so the repository is at
-           cd /mnt/c/Users/<you>/Desktop/.../esp_visualization
+           cd /mnt/c/Users/<you>/Desktop/.../Pymol_esp_visualization
        No copying needed - it is the same folder.
 
     4. Create the environment and run as described under USAGE below.
@@ -285,7 +285,7 @@ xyzToCube.py, then both studies run on the result in seconds instead of parsing
 USAGE
 -----
 
-    conda activate esp
+    conda activate esp-pymol
 
     cd tools
     python iso_sweep.py    --folder ../sandbox/brombenzol
