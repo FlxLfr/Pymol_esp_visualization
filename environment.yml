@@ -5,7 +5,7 @@
 #
 # Kept deliberately small: PyMOL pulls in Qt and a long dependency chain, so it
 # lives in its own environment rather than in `base`.
-name: esp
+name: esp-pymol
 channels:
   - conda-forge
 dependencies:
