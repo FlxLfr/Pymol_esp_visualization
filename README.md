@@ -339,15 +339,6 @@ python render_esp.py --width 4000 --height 3200 --dpi 600
 python render_esp.py --rainbow
 ```
 
-**Do not use the PyMOL launcher unless you have to.** `python render_esp.py …`
-loads no `pymolrc`, so nobody's personal start-up file can silently change a
-setting. If you do use the launcher, both the `--` separator and `-k` are
-required:
-
-```bash
-pymol -ckq render_esp.py -- --prefix molecule
-```
-
 ---
 
 ## 4. Several molecules at once (`run_all.py`)
@@ -562,11 +553,6 @@ Harmless, and it appears on every run. VTK-m is an optional parallel contouring
 backend that the conda-forge PyMOL build is not compiled with. PyMOL uses its
 built-in marching-tetrahedra routine instead; same isosurface, slightly slower.
 Nothing to fix.
-
-**The script runs under `pymol -cq` but nothing happens, no error.**
-The `--` separator is missing, so PyMOL swallowed the arguments. Use
-`pymol -ckq render_esp.py -- --prefix molecule`, or simply
-`python render_esp.py --prefix molecule`.
 
 **The molecule floats next to its surface instead of inside it.**
 Unit mismatch. The grid is in Bohr, the structure file is probably in Å. Check
