@@ -13,8 +13,10 @@ Walks a directory tree, and for every molecule folder it finds:
   2. renders the standard set of ESP images,
   3. records V_S,min and V_S,max.
 
-Finally it writes ``summary.csv`` with the surface ESP statistics of every
-molecule, and tells you which colour-scale range covers all of them.
+Finally it writes a dated ``summary_<DD-MM-YYYY>.csv`` with the surface ESP
+statistics of every molecule, and tells you which colour-scale range covers
+all of them. A ``--rainbow`` run writes its own ``summary_rainbow_<date>.csv``,
+so no run overwrites the summary of another.
 
 
 A molecule folder is any directory that contains either
@@ -55,6 +57,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import datetime
 import os
 import sys
 import types
@@ -209,6 +212,29 @@ def render(entry, cubes, esp_range, iso, transparency, backgrounds,
     return render_esp.render_all(args)
 
 
+def summary_name(is_reference, rainbow, when=None):
+    """summary[_check][_rainbow]_DD-MM-YYYY.csv
+
+    Dated on purpose, so that a later run does not silently overwrite the
+    summary of an earlier one. The _rainbow part matters just as much: the
+    scene and the images already carry that suffix, and without it here the
+    CSV was the one file a --rainbow run clobbered - a run over one molecule
+    replaced the summary of the whole set, and the loss was invisible until
+    someone opened the file.
+
+    The same name is built in the sister project (run_allVMD.py), so
+    summaries from the two pipelines can be filed next to each other.
+    """
+    stamp = (when or datetime.date.today()).strftime("%d-%m-%Y")
+    parts = ["summary"]
+    if is_reference:
+        parts.append("check")
+    if rainbow:
+        parts.append("rainbow")
+    parts.append(stamp)
+    return "_".join(parts) + ".csv"
+
+
 def write_summary(path, rows, common_range=None):
     fields = ["molecule", "structure", "grid", "iso_au",
               "shell_points", "VS_min_au", "VS_max_au",
@@ -315,7 +341,9 @@ def main(argv=None):
                    help="plain output without ANSI colours (same effect as "
                         "setting the NO_COLOR environment variable)")
     p.add_argument("--summary", default=None,
-                   help="path of the CSV summary (default <root>/summary.csv)")
+                   help="path of the CSV summary (default "
+                        "<root>/summary_DD-MM-YYYY.csv, with _check on the "
+                        "self test and _rainbow with --rainbow)")
     args = p.parse_args(argv)
 
     if args.no_color:
@@ -398,7 +426,7 @@ def main(argv=None):
         print("\n(--two-pass skipped: a single molecule needs no common scale)")
 
     summary = args.summary or os.path.join(
-        args.root, "summary_check.csv" if is_reference else "summary.csv")
+        args.root, summary_name(is_reference, args.rainbow))
     write_summary(summary, rows, common_range=common)
 
     print("\n" + "-" * 70)

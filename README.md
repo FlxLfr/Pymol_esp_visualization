@@ -115,10 +115,11 @@ python run_all.py
 ```
 Without parameters `run_all.py` runs on `reference/brombenzol/`. It converts,
 renders, and writes the images to `reference/brombenzol/images_check/` plus a
-summary in `reference/summary_check.csv`
+summary in `reference/summary_check_<date>.csv`
 
 Compare your `images_check/` with the committed `images/` and your
-`summary_check.csv` with `summary.csv`. On the decimated reference grid expect
+`summary_check_<date>.csv` with `summary.csv`. On the decimated reference grid
+expect
 V_S,min ≈ −0.0186, V_S,max ≈ +0.0307 and an automatic colour scale of ±0.0350.
 The first two are 1–3 % below the full-resolution values (−0.0188 / +0.0315),
 which is what a five-fold coarser grid costs; the colour scale comes out
@@ -359,7 +360,8 @@ python run_all.py --root ../sandbox --two-pass
 ```
 
 This converts what needs converting, renders every molecule, writes an `esp.pml`
-next to each molecule's cube files, and collects `summary.csv`. Called **without
+next to each molecule's cube files, and collects a dated `summary_<date>.csv`.
+Called **without
 arguments** it runs on `reference/` instead — the smoke test from §1.3.
 
 ### Options
@@ -381,7 +383,7 @@ arguments** it runs on `reference/` instead — the smoke test from §1.3.
 | `--height` | `1600` | passed through |
 | `--dpi` | `300` | passed through |
 | `--images-dir` | `images` (`images_check` for the built-in reference run) | name of the output folder inside each molecule folder |
-| `--summary` | `<root>/summary.csv` | path of the CSV summary |
+| `--summary` | `<root>/summary_DD-MM-YYYY.csv` | path of the CSV summary. The date keeps a later run from overwriting an earlier one; `--rainbow` adds `_rainbow`, the smoke test `_check`. |
 | `--no-color` | off | plain console output without ANSI colours |
 
 ### Examples
@@ -436,7 +438,9 @@ With `--rainbow` the same names appear with `_rainbow` inserted
 (`<prefix>_rainbow_pi.png`, `esp_rainbow.pml`, …), so a rainbow run never
 overwrites the standard set.
 
-Per run, `run_all.py` writes `summary.csv`:
+Per run, `run_all.py` writes `summary_<DD-MM-YYYY>.csv`. A `--rainbow` run
+writes `summary_rainbow_<date>.csv` instead, so the two sets never overwrite
+each other:
 
 | Column | Content |
 |---|---|
@@ -516,7 +520,7 @@ Pymol_esp_visualization/
 ├── scripts/
 │   ├── xyzToCube.py              Turbomole pointval -> Gaussian cube
 │   ├── render_esp.py             standard image set from cube files
-│   ├── run_all.py                batch driver + summary.csv
+│   ├── run_all.py                batch driver + dated summary CSV
 │   ├── constants.py              unit conversions, shared by all scripts
 │   └── ansi.py                   console colours (no dependencies)
 ├── reference/                    known-good example — output, not input
