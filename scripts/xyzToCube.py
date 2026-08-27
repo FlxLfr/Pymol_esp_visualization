@@ -392,7 +392,16 @@ def read_values(path, verbose=True):
 # ----------------------------------------------------------------------------
 
 def write_cube(path, info, data, atoms, stride=1, comment=""):
-    """Schreibt ein Gaussian-Cube. Alle Laengen in Bohr."""
+    """Schreibt ein Gaussian-Cube. Alle Laengen in Bohr.
+
+    Geschrieben wird erst nach <name>.part und am Ende umbenannt. Ein voller
+    Cube ist 200 MB und braucht Minuten; wird der Lauf in dieser Zeit
+    abgebrochen - Strg-C, geschlossenes Fenster, volle Platte -, bliebe sonst
+    eine halbe Datei mit gueltigem Kopf liegen. Der naechste Lauf haelt die fuer
+    fertig, ueberspringt die Konvertierung und rendert eine Isoflaeche mit
+    fehlender hinterer Haelfte. Das Umbenennen ist der Moment, in dem die Datei
+    entsteht - vorher gibt es sie unter ihrem Namen nicht.
+    """
     if stride > 1:
         data = data[::stride, ::stride, ::stride]
 
@@ -406,7 +415,8 @@ def write_cube(path, info, data, atoms, stride=1, comment=""):
     # Voxelvektoren (mit Stride skaliert)
     voxel = np.array([deltas[i] * stride * vecs[i] for i in range(3)])
 
-    with open(path, "w", encoding="utf-8") as fh:
+    tmp = path + ".part"
+    with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(f"{comment or 'Cube erzeugt mit xyzToCube.py'}\n")
         fh.write(f"{info.get('quantity', '') or 'volumetric data'} | "
                  f"{info.get('title', '')} | Einheiten: Bohr\n")
@@ -438,6 +448,10 @@ def write_cube(path, info, data, atoms, stride=1, comment=""):
         if buf:
             fh.write("".join(buf))
 
+    # Erst hier existiert <name>.cube. os.replace ersetzt auch eine vorhandene
+    # Datei und ist auf einem Dateisystem unteilbar - es gibt keinen Moment, in
+    # dem der alte Cube weg und der neue noch nicht da ist.
+    os.replace(tmp, path)
     return n, origin, voxel
 
 
