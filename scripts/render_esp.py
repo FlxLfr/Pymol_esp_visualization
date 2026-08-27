@@ -4,43 +4,42 @@
 render_esp.py
 =============
 
-Erzeugt einen standardisierten Satz ESP-Bilder aus einem Paar Cube-Dateien
-(Elektronendichte + elektrostatisches Potential), vollautomatisch und ohne
-einen einzigen Mausklick.
+Produces a standardised set of ESP images from a pair of cube files (electron
+density + electrostatic potential), fully automatic and without a single mouse
+click.
 
-Das ESP wird auf die Isoflaeche der Elektronendichte bei rho = 0.001 a.u.
-abgebildet (Konvention nach Politzer/Murray) und aus drei fest definierten
-Blickrichtungen gerendert:
+The ESP is mapped onto the isosurface of the electron density at
+rho = 0.001 a.u. (the Politzer/Murray convention) and rendered from three
+fixed viewing directions:
 
-    pi      senkrecht auf die Molekuelebene   -> zeigt das pi-System
-    edge    in der Molekuelebene              -> Profil, C-X-Achse waagerecht
-    sigma   entlang der C-X-Achse von aussen  -> zeigt das sigma-Loch frontal
+    pi      perpendicular to the molecular plane -> shows the pi system
+    edge    in the molecular plane               -> profile, C-X axis horizontal
+    sigma   along the C-X axis from outside      -> shows the sigma hole head on
 
-Die Orientierung wird aus der Geometrie berechnet (Traegheitsachsen +
-Kohlenstoff-Halogen-Achse), NICHT ueber PyMOLs ``orient``. Dadurch liefern
-verschiedene Molekuele reproduzierbar dieselbe Ausrichtung.
+The orientation is computed from the geometry (inertial axes + the
+carbon-halogen axis), NOT via PyMOL's ``orient``. That way different molecules
+reproducibly come out in the same alignment.
 
 
-Aufruf
-------
+Call
+----
     pymol -cq render_esp.py -- --density td.cube --esp tp.cube \\
                                --struct brombenzol_aro_opti.mol \\
                                --prefix brombenzol
 
-Ohne Argumente sucht das Skript im aktuellen Ordner nach ``td.cube``,
-``tp.cube`` und einer Struktur (.mol/.sdf/.xyz).
+Without arguments the script looks in the current folder for ``td.cube``,
+``tp.cube`` and a structure (.mol/.sdf/.xyz).
 
 
-Farbskala
----------
-Standardmaessig wird der ESP-Bereich aus den Daten *auf der Isoflaeche*
-bestimmt und symmetrisch auf einen glatten Wert aufgerundet. Der verwendete
-Wert wird ins Log und in die Datei ``<prefix>_settings.txt`` geschrieben.
+Colour scale
+------------
+By default the ESP range is determined from the data *on the isosurface* and
+rounded up symmetrically to a round value. The value used is written to the log
+and to the file ``<prefix>_settings.txt``.
 
-!! Fuer den direkten Vergleich mehrerer Molekuele muss die Skala fest sein.
-   Dazu einmal alle Molekuele mit --esp-range auto durchlaufen lassen, den
-   groessten gemeldeten Wert notieren und danach alle erneut mit
-   --esp-range <wert> rendern.
+!! For a direct comparison of several molecules the scale has to be fixed.
+   Run all molecules once with --esp-range auto, note the largest value
+   reported, and then render them all again with --esp-range <value>.
 """
 
 from __future__ import annotations
@@ -53,20 +52,20 @@ import sys
 import numpy as np
 
 import ansi
-import xyzToCube                    # Elementliste (siehe Z_SYMBOL) und Schale
-# Die Schalenauswertung (rho = iso) und die Farbskala stehen in xyzToCube.py,
-# weil das Konvertierskript sie fuer sein eigenes esp.pml ebenfalls braucht.
-# Beide Skripte benutzen damit dieselbe Definition von "auf der Isoflaeche".
+import xyzToCube                    # element list (see Z_SYMBOL) and the shell
+# The shell evaluation (rho = iso) and the colour scale live in xyzToCube.py,
+# because the converter needs them for its own esp.pml as well. Both scripts
+# therefore use the same definition of "on the isosurface".
 from xyzToCube import esp_statistics, nice_range, shell_mask, SHELL_TOL_FACTOR
 from constants import BOHR_PER_ANGSTROM, HARTREE_TO_KCAL, HARTREE_TO_KJ
 
 
 # ----------------------------------------------------------------------------
-# Cube einlesen (nur fuer die Statistik; PyMOL laedt die Dateien selbst)
+# Reading the cube (for the statistics only; PyMOL loads the files itself)
 # ----------------------------------------------------------------------------
 
 def read_cube(path):
-    """Liest ein Gaussian-Cube. Rueckgabe: (werte3d, atome, origin, voxel)."""
+    """Reads a Gaussian cube. Returns (values3d, atoms, origin, voxel)."""
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         fh.readline()
         fh.readline()
@@ -92,45 +91,46 @@ def read_cube(path):
         values = np.fromstring(fh.read(), sep=" ", dtype=np.float64)
 
     if values.size != int(np.prod(n)):
-        raise ValueError(f"{path}: erwartet {int(np.prod(n))} Werte, "
-                         f"gelesen {values.size}")
+        raise ValueError(f"{path}: expected {int(np.prod(n))} values, "
+                         f"read {values.size}")
     return values.reshape(n), atoms, origin, voxel
 
 
 def shell_points(density, esp, origin, voxel, iso=0.001,
                  tol_factor=SHELL_TOL_FACTOR):
-    """Koordinaten und ESP-Werte der Gitterpunkte auf der rho=iso-Schale.
-    Nur die Schalenpunkte werden materialisiert, nicht das ganze Gitter -
-    bei 251^3 waere ein volles Koordinatenfeld sonst mehrere hundert MB.
+    """Coordinates and ESP values of the grid points on the rho = iso shell.
+
+    Only the shell points are materialised, not the whole grid - at 251^3 a
+    full coordinate array would otherwise be several hundred MB.
     """
     mask = shell_mask(density, iso, tol_factor)
-    idx = np.argwhere(mask)                       # (N, 3) Gitterindizes
-    pos = origin + idx @ voxel                    # (N, 3) kartesisch, Bohr
+    idx = np.argwhere(mask)                       # (N, 3) grid indices
+    pos = origin + idx @ voxel                    # (N, 3) cartesian, Bohr
     return pos, esp[mask]
 
 
 def halogen_axes(atoms):
-    """Alle Halogene mit ihrer C-X-Achse.
+    """All halogens with their C-X axis.
 
-    Ein Molekuel kann mehr als ein Halogen tragen - Jedes wird einzeln ausgewertet.
+    A molecule can carry more than one halogen - each is evaluated separately.
 
-    Rueckgabe: Liste von dicts mit
-      index   0-basierter Atomindex des Halogens
-      symbol  Elementsymbol
-      label   Symbol + 1-basierte Nummer, z.B. "Cl12" (wie in der Ausgabe)
-      pos     Koordinaten des Halogens
-      axis    normierte C->X-Achse (zeigt zum sigma-Loch)
-      r_limit maximaler Abstand, in dem die eigene Oberflaeche des Halogens
-              liegen kann (Bohr) - siehe unten
-    Halogene ohne gebundenen Kohlenstoff in Reichweite werden uebersprungen.
+    Returns a list of dicts with
+      index   0-based atom index of the halogen
+      symbol  element symbol
+      label   symbol + 1-based number, e.g. "Cl12" (as in the output)
+      pos     coordinates of the halogen
+      axis    normalised C->X axis (points at the sigma hole)
+      r_limit the largest distance at which the halogen's own surface can lie
+              (Bohr) - see below
+    Halogens without a bonded carbon within reach are skipped.
 
-    Warum ``r_limit``: bei gefalteten Molekuelen zeigt der Kegel um die C-X-
-    Achse nicht ins Leere, sondern auf einen anderen Molekuelteil. Ohne
-    Abstandsgrenze wird dessen Oberflaeche mitgemessen. Triazolam ist genau so
-    ein Fall - der Kegel um Cl21 trifft die Methylgruppe am Triazolring, und
-    die lieferte ein "sigma-Loch" von +18.8 statt +10.5 kcal/(mol*e). Die
-    rho=0.001-Flaeche eines Halogens liegt bei etwa 1.1 bis 1.2 vdW-Radien;
-    der Faktor 1.6 laesst reichlich Luft und schliesst alles Weitere aus.
+    Why ``r_limit``: in folded molecules the cone around the C-X axis does not
+    point into empty space but at another part of the molecule. Without a
+    distance limit that part's surface is measured as well. Triazolam is
+    exactly such a case - the cone around Cl21 hits the methyl group on the
+    triazole ring, and that returned a "sigma hole" of +18.8 instead of +10.5
+    kcal/(mol*e). The rho = 0.001 surface of a halogen sits at about 1.1 to 1.2
+    vdW radii; the factor 1.6 leaves ample room and excludes everything beyond.
     """
     coords = np.array([[a[1], a[2], a[3]] for a in atoms])
     znums = np.array([a[0] for a in atoms])
@@ -159,33 +159,33 @@ def halogen_axes(atoms):
 
 def local_extrema(pos, vals, atoms,
                   cone_cos=0.80, belt_cos=0.35, belt_factor=1.5):
-    """Regionsaufgeloeste Oberflaechen-Extrema.
+    """Region-resolved surface extrema.
 
-    Warum das noetig ist: das *globale* V_S,max einer Aryl-Halogenid-Oberflaeche
-    sitzt fast immer auf den Ring-Wasserstoffen, nicht auf dem Halogen. Bei
-    Brombenzol und Iodbenzol liefert der globale Wert deshalb zweimal dasselbe
-    C-H (+0.031 a.u.), waehrend sich die sigma-Loecher, um die es eigentlich
-    geht, um fast den Faktor zwei unterscheiden. Fuer jeden Vergleich von
-    Halogenbruecken-Donoren braucht man das *lokale* Maximum auf dem Halogen.
+    Why this is needed: the *global* V_S,max of an aryl halide surface sits
+    almost always on the ring hydrogens, not on the halogen. For bromobenzene
+    and iodobenzene the global value therefore returns the same C-H twice
+    (+0.031 a.u.), while the sigma holes, which are the actual subject, differ
+    by almost a factor of two. Any comparison of halogen-bond donors needs the
+    *local* maximum on the halogen.
 
-    Regionen:
-      sigma   Kappe um die verlaengerte C-X-Achse (Oeffnungswinkel aus cone_cos)
-      belt    Guertel senkrecht dazu, in Halogennaehe
+    Regions:
+      sigma   cap around the extended C-X axis (opening angle from cone_cos)
+      belt    belt perpendicular to it, close to the halogen
 
-    Rueckgabe: dict mit den Kennwerten in atomaren Einheiten; die
-    halogenbezogenen Eintraege fehlen, wenn das Molekuel kein Halogen enthaelt.
+    Returns a dict with the values in atomic units; the halogen-related entries
+    are absent if the molecule contains no halogen.
     """
     out = {}
     coords = np.array([[a[1], a[2], a[3]] for a in atoms])
     znums = np.array([a[0] for a in atoms])
 
-    # --- Region des globalen Extremums benennen ------------------------
+    # --- name the region of the global extremum ------------------------
     for tag, i in (("vmax", int(np.argmax(vals))), ("vmin", int(np.argmin(vals)))):
         d = np.linalg.norm(coords - pos[i], axis=1)
         j = int(np.argmin(d))
         out[f"{tag}_atom"] = f"{z_symbol(int(znums[j]))}{j + 1}"
 
-    # --- Halogenregionen, eines nach dem anderen -------------------------
+    # --- halogen regions, one after the other ----------------------------
     entries = []
     for hal in halogen_axes(atoms):
         e = {k: hal[k] for k in ("index", "symbol", "label")}
@@ -196,8 +196,9 @@ def local_extrema(pos, vals, atoms,
         r[r == 0] = 1e-9
         cos = (rel @ axis) / r
 
-        # Abstandsgrenze: sonst zaehlen bei gefalteten Molekuelen Punkte auf
-        # einem ganz anderen Molekuelteil zur Kappe (siehe halogen_axes).
+        # Distance limit: otherwise, in folded molecules, points on a
+        # completely different part of the molecule count towards the cap (see
+        # halogen_axes).
         cap = (cos > cone_cos) & (r < hal["r_limit"])
         if cap.sum() >= 5:
             e["sigma_max"] = float(vals[cap].max())
@@ -215,22 +216,21 @@ def local_extrema(pos, vals, atoms,
 
 
 def rank_halogens(entries):
-    """Halogeneintraege nach sigma-Loch absteigend sortieren.
+    """Sort the halogen entries by sigma hole, descending.
 
-    Eintraege ohne auswertbares sigma-Loch wandern ans Ende. Die Reihenfolge
-    bestimmt die Ausgabe und - ueber den ersten Eintrag - die Orientierung der
-    sigma-Ansicht.
+    Entries without an evaluable sigma hole go to the end. The order determines
+    the output and - via the first entry - the orientation of the sigma view.
     """
     return sorted(entries,
                   key=lambda e: -e.get("sigma_max", -np.inf))
 
 
 def promote_primary(out):
-    """Kennwerte des staerksten sigma-Lochs zusaetzlich flach in ``out`` legen.
+    """Also place the values of the strongest sigma hole flat into ``out``.
 
-    Damit bleiben Aufrufer, die nur EINEN Wert erwarten (CSV-Spalte
-    ``sigma_hole_au``, Zusammenfassungstabelle), unveraendert lauffaehig; bei
-    einem einzelnen Halogen ist das Ergebnis bitgleich zu vorher.
+    That keeps callers working which expect only ONE value (the CSV column
+    ``sigma_hole_au``, the summary table); with a single halogen the result is
+    bit-identical to before.
     """
     entries = out.get("halogens") or []
     if not entries:
@@ -250,7 +250,7 @@ def promote_primary(out):
 
 
 def _trilinear(vol, origin, delta, pts):
-    """Trilineare Interpolation auf einem achsparallelen, regelmaessigen Gitter."""
+    """Trilinear interpolation on an axis-aligned, regular grid."""
     f = (pts - origin) / delta
     i0 = np.floor(f).astype(int)
     frac = f - i0
@@ -270,31 +270,31 @@ def _trilinear(vol, origin, delta, pts):
 
 
 def _cone_directions(axis, cone_cos, n=400):
-    """Richtungen in einer Kappe um ``axis``; die erste ist die Achse selbst.
+    """Directions in a cap around ``axis``; the first one is the axis itself.
 
-    Der Rest ist eine Fibonacci-Spirale auf der Kugelkappe - gleichmaessige
-    Belegung ohne Haeufung an der Achse, wie sie bei Kugelkoordinaten auftraete.
+    The rest is a Fibonacci spiral on the spherical cap - even coverage without
+    the crowding near the axis that spherical coordinates would produce.
 
-    Warum die Achse gesondert: das ``+ 0.5`` in ``k`` ist die Mittelpunktsregel
-    fuer FLAECHENGLEICHE Verteilung - jeder Strahl sitzt in der Mitte eines
-    gleich grossen Rings. Das ist richtig, wenn man ueber die Kappe mittelt.
-    Wir suchen aber ein MAXIMUM, und das sitzt beim sigma-Loch genau auf der
-    Achse. Mit dem Versatz war der innerste Strahl 1.281 Grad davon entfernt,
-    die Achse selbst wurde nie ausgewertet, und jedes achsensymmetrische
-    Molekuel meldete stur "1.3 Grad" - eine Untergrenze des Abtastrasters,
-    keine Messung. Der Fehler im Wert war klein (4-Bromacetophenon: 0.008
-    kcal/(mol*e)), die Meldung aber irrefuehrend.
+    Why the axis is added separately: the ``+ 0.5`` in ``k`` is the midpoint
+    rule for an EQUAL-AREA distribution - every ray sits in the middle of a
+    ring of the same size. That is right when averaging over the cap. But we
+    are looking for a MAXIMUM, and for the sigma hole that sits exactly on the
+    axis. With the offset the innermost ray was 1.281 degrees away from it, the
+    axis itself was never evaluated, and every axially symmetric molecule
+    stubbornly reported "1.3 degrees" - a lower bound of the sampling grid, not
+    a measurement. The error in the value was small (4-bromoacetophenone: 0.008
+    kcal/(mol*e)), but the report was misleading.
     """
     axis = np.asarray(axis, dtype=float)
 
-    # n-1 Spiralrichtungen; die Achse kommt als erste dazu
+    # n-1 spiral directions; the axis is prepended
     m = max(1, n - 1)
     k = np.arange(m) + 0.5
     cosv = 1.0 - (1.0 - cone_cos) * k / m          # cone_cos .. 1
     phi = np.pi * (1 + 5 ** 0.5) * k
     sinv = np.sqrt(np.maximum(0.0, 1 - cosv ** 2))
 
-    # orthonormale Basis um axis
+    # orthonormal basis around axis
     tmp = np.array([1.0, 0.0, 0.0])
     if abs(np.dot(tmp, axis)) > 0.9:
         tmp = np.array([0.0, 1.0, 0.0])
@@ -309,27 +309,27 @@ def _cone_directions(axis, cone_cos, n=400):
 
 def sigma_hole_interpolated(density, esp, origin, voxel, atoms, iso=0.001,
                             cone_cos=0.80, n_rays=400, dr=0.02, r_max=14.0):
-    """sigma-Loch ohne Abhaengigkeit von der Gitterausrichtung.
+    """The sigma hole, independent of how the grid is aligned.
 
-    Das Problem der punktbasierten Auswertung: das sigma-Loch ist ein Gipfel
-    *auf* der C-X-Achse. Ob ein Gitterpunkt dort UND gleichzeitig innerhalb der
-    duennen rho=iso-Schale liegt, ist Zufall. Bei Brombenzol lag der beste
-    Punkt auf dem 126^3-Gitter 1.14 Bohr neben der Achse - der Wert kam 28 %
-    zu niedrig heraus, obwohl 144 Punkte in der Kappe lagen.
+    The problem with the point-based evaluation: the sigma hole is a peak *on*
+    the C-X axis. Whether a grid point happens to sit there AND inside the thin
+    rho = iso shell at the same time is luck. For bromobenzene the best point
+    on the 126^3 grid lay 1.14 Bohr off the axis - the value came out 28 % too
+    low, although 144 points lay inside the cap.
 
-    Stattdessen hier: Strahlen vom Halogen aus in eine Kappe um die Achse, auf
-    jedem Strahl der Radius gesucht, bei dem rho die Isoflaeche schneidet, und
-    dort V ausgewertet - beides trilinear interpoliert. Das Ergebnis haengt
-    nicht mehr davon ab, wo die Gitterpunkte zufaellig liegen.
+    Instead, here: rays from the halogen into a cap around the axis, on every
+    ray the radius at which rho crosses the isosurface, and V evaluated there -
+    both trilinearly interpolated. The result no longer depends on where the
+    grid points happen to lie.
 
-    Traegt das Molekuel mehrere Halogene, wird jedes einzeln abgetastet.
+    If the molecule carries several halogens, each is sampled separately.
 
-    Rueckgabe: dict {Atomindex: {sigma_max, sigma_angle, sigma_method}};
-    leeres dict, wenn kein Halogen auswertbar ist.
+    Returns a dict {atom index: {sigma_max, sigma_angle, sigma_method}}; an
+    empty dict if no halogen can be evaluated.
     """
     diag = np.diag(voxel)
     if not np.allclose(voxel, np.diag(diag)):
-        return {}                         # nicht achsparallel - Fallback
+        return {}                         # not axis-aligned - fall back
     delta = diag
 
     result = {}
@@ -344,21 +344,20 @@ def sigma_hole_interpolated(density, esp, origin, voxel, atoms, iso=0.001,
         for d in dirs:
             pts = origin_atom + radii[:, None] * d[None, :]
             rho = _trilinear(density, origin, delta, pts)
-            # INNERSTER Schnittpunkt, von innen nach aussen: der Strahl startet
-            # tief in der Dichte des Halogens, das erste Unterschreiten von iso
-            # ist dessen eigene Oberflaeche. Frueher wurde der aeusserste
-            # Schnittpunkt genommen; bei gefalteten Molekuelen taucht der
-            # Strahl dahinter in einen anderen Molekuelteil ein und misst
-            # dessen Oberflaeche.
+            # INNERMOST crossing, from inside outwards: the ray starts deep
+            # inside the halogen's density, and the first drop below iso is its
+            # own surface. The outermost crossing used to be taken; in folded
+            # molecules the ray then dives into another part of the molecule
+            # behind it and measures that surface instead.
             if rho[0] < iso:
-                continue                  # Strahl startet schon ausserhalb
+                continue                  # the ray already starts outside
             below = np.nonzero(rho < iso)[0]
             if below.size == 0:
-                continue                  # Flaeche innerhalb r_limit nicht getroffen
+                continue                  # surface not hit within r_limit
             j = below[0] - 1
             if j < 0 or j + 1 >= len(radii):
                 continue
-            # lineare Interpolation des Radius am Isowert
+            # linear interpolation of the radius at the isovalue
             r0, r1 = radii[j], radii[j + 1]
             y0, y1 = rho[j], rho[j + 1]
             rs = r0 + (iso - y0) * (r1 - r0) / (y1 - y0) if y1 != y0 else r0
@@ -372,46 +371,45 @@ def sigma_hole_interpolated(density, esp, origin, voxel, atoms, iso=0.001,
         result[hal["index"]] = {
             "sigma_max": best_v,
             "sigma_angle": float(np.degrees(np.arccos(min(1.0, best_cos)))),
-            "sigma_method": "interpoliert"}
+            "sigma_method": "interpolated"}
 
     return result
 
 
 # ----------------------------------------------------------------------------
-# Orientierung aus der Geometrie
+# Orientation from the geometry
 # ----------------------------------------------------------------------------
 
 HALOGENS = {9: "F", 17: "Cl", 35: "Br", 53: "I"}
 
 # ----------------------------------------------------------------------------
-# Farbrampen
+# Colour ramps
 #
-# Beide behalten dieselbe Konvention: ROT = negativ, BLAU = positiv, und die
-# Mitte der Skala ist V = 0. Die Regenbogenrampe schiebt nur Gelb/Gruen/Cyan
-# dazwischen, statt ueber Weiss zu gehen. Dadurch bleiben die Bilder beider
-# Rampen an den Enden vergleichbar - waere die Regenbogenskala umgedreht
-# (blau = negativ, wie in manchen Programmen), koennte man die zwei Saetze
-# nicht nebeneinanderlegen.
+# Both keep the same convention: RED = negative, BLUE = positive, and the
+# middle of the scale is V = 0. The rainbow ramp only pushes yellow/green/cyan
+# in between instead of passing through white. That keeps the images of both
+# ramps comparable at the ends - were the rainbow scale reversed (blue =
+# negative, as in some programs), the two sets could not be laid side by side.
 #
-# Nutzen der Regenbogenrampe: rot-weiss-blau hat in der Mitte kaum
-# Farbaufloesung, schwach polare Bereiche sehen alle gleich weiss aus. Der
-# Regenbogen loest genau dort auf. Preis: er ist nicht perzeptuell gleichmaessig
-# und erzeugt Kanten, wo keine sind - fuer eine quantitative Aussage bleibt
-# rot-weiss-blau die ehrlichere Darstellung.
+# What the rainbow ramp is good for: red-white-blue has almost no colour
+# resolution in the middle, and weakly polar regions all look equally white.
+# The rainbow resolves exactly there. The price: it is not perceptually uniform
+# and creates edges where there are none - for a quantitative statement
+# red-white-blue remains the more honest depiction.
 # ----------------------------------------------------------------------------
 
-# Rand um das Molekuel beim Bildausschnitt, in Angstrom.
+# Margin around the molecule in the image, in Angstrom.
 #
-# Gezoomt wird auf die ATOME, nicht auf die Isoflaeche: das Flaechenobjekt
-# traegt die Ausdehnung der ganzen Gitterbox mit sich und liesse das Molekuel
-# als Briefmarke in der Bildmitte erscheinen. Der Platz, den die Flaeche
-# ueber die Kerne hinaus braucht, muss deshalb hier dazukommen - die
-# rho = 0.001-Flaeche liegt rund 1.7 bis 2.1 Angstrom ausserhalb der
-# aeussersten Kerne, 2.4 deckt das mit einem schmalen Rand ab.
+# The zoom is on the ATOMS, not on the isosurface: the surface object carries
+# the extent of the whole grid box with it and would leave the molecule looking
+# like a postage stamp in the middle of the image. The room the surface needs
+# beyond the nuclei therefore has to be added here - the rho = 0.001 surface
+# sits about 1.7 to 2.1 Angstrom outside the outermost nuclei, and 2.4 covers
+# that with a narrow margin.
 #
-# Frueher eine Option (--buffer). Herausgenommen, weil kein gemessener Wert
-# davon abhaengt und ein anderer Rand nur einen Bildersatz erzeugt, der sich
-# mit den uebrigen nicht mehr nebeneinanderlegen laesst.
+# This used to be an option (--buffer). It was taken out because no measured
+# value depends on it, and a different margin only produces an image set that
+# can no longer be laid beside the others.
 BUFFER_ANGSTROM = 2.4
 
 RAMP_PYMOL = {
@@ -425,9 +423,9 @@ RAMP_HEX = {
 
 
 def ramp_levels(rng, rainbow=False):
-    """Stuetzstellen und Farben fuer ``cmd.ramp_new``.
+    """Anchor levels and colours for ``cmd.ramp_new``.
 
-    Rueckgabe: (levels, colors) - gleich lang, symmetrisch um 0.
+    Returns (levels, colors) - equal length, symmetric about 0.
     """
     name = "rainbow" if rainbow else "redblue"
     colors = RAMP_PYMOL[name]
@@ -435,15 +433,16 @@ def ramp_levels(rng, rainbow=False):
     levels = [-rng + 2.0 * rng * i / (n - 1) for i in range(n)]
     return levels, colors
 
-# van-der-Waals-Radien nach Bondi (J. Phys. Chem. 1964, 68, 441), Angstrom.
-# Nur als Groessenordnung fuer die Abstandsgrenze der sigma-Loch-Suche.
+# van der Waals radii after Bondi (J. Phys. Chem. 1964, 68, 441), Angstrom.
+# Only as an order of magnitude for the distance limit of the sigma-hole
+# search.
 VDW_ANGSTROM = {9: 1.47, 17: 1.75, 35: 1.85, 53: 1.98}
 
-# Rueckuebersetzung Ordnungszahl -> Symbol, abgeleitet aus derselben Liste, mit
-# der xyzToCube.py in die Gegenrichtung uebersetzt. Frueher stand hier eine
-# zweite, handgepflegte Tabelle mit 20 Eintraegen: ein Molekuel mit einem
-# Element, das dort fehlte, wurde sauber konvertiert und anschliessend als
-# "Z13" statt "Al13" beschriftet. Eine Quelle, beide Richtungen.
+# Reverse lookup, atomic number -> symbol, derived from the same list with
+# which xyzToCube.py translates in the other direction. There used to be a
+# second, hand-maintained table of 20 entries here: a molecule with an element
+# missing from it converted cleanly and was then labelled "Z13" instead of
+# "Al13". One source, both directions.
 Z_SYMBOL = {i + 1: sym for i, sym in enumerate(xyzToCube.ELEMENTS)}
 
 
@@ -452,28 +451,27 @@ def z_symbol(z):
 
 
 def molecular_frame(atoms, halogen_index=None):
-    """Bestimmt ein reproduzierbares Molekuelkoordinatensystem.
+    """Determines a reproducible molecular frame.
 
-    ``halogen_index`` waehlt bei mehreren Halogenen aus, welches die Achse
-    festlegt - und damit, auf welches sigma-Loch die sigma-Ansicht blickt.
-    Ohne Angabe wird das erste Halogen in der Atomliste genommen; render_all
-    uebergibt das Halogen mit dem staerksten sigma-Loch.
+    With several halogens, ``halogen_index`` selects which one fixes the axis -
+    and therefore which sigma hole the sigma view looks at. Without it the
+    first halogen in the atom list is taken; render_all passes the halogen with
+    the strongest sigma hole.
 
-    Rueckgabe: (normal, axis, sigma_axis, center)
-      normal      Flaechennormale (kleinste Traegheitsausdehnung, Schweratome)
-      axis        IN DIE EBENE PROJIZIERTE C->Halogen-Achse. Sie spannt mit
-                  ``normal`` ein sauberes Rechtssystem auf und richtet die
-                  pi- und edge-Ansicht aus.
-      sigma_axis  die ECHTE C->Halogen-Achse, unprojiziert
-      center      geometrischer Mittelpunkt aller Atome
-    Alle Vektoren normiert, Koordinaten in denselben Einheiten wie ``atoms``.
+    Returns (normal, axis, sigma_axis, center)
+      normal      surface normal (smallest inertial extent, heavy atoms)
+      axis        the C->halogen axis PROJECTED INTO THE PLANE. Together with
+                  ``normal`` it spans a clean right-handed frame and orients
+                  the pi and edge views.
+      sigma_axis  the TRUE C->halogen axis, unprojected
+      center      geometric centre of all atoms
+    All vectors normalised, coordinates in the same units as ``atoms``.
 
-    Warum zwei Achsen: bei planaren Molekuelen sind beide identisch, die
-    Projektion ist dort reine Rundungskosmetik. Bei nicht-planaren Molekuelen
-    dreht sie die Achse aber tatsaechlich weg - bei Triazolam steht die
-    C-Cl21-Bindung 42.9 Grad aus der Ausgleichsebene heraus, und die
-    sigma-Ansicht blickte entsprechend 42.9 Grad am sigma-Loch vorbei. Fuer die
-    sigma-Ansicht ist deshalb ``sigma_axis`` zu verwenden.
+    Why two axes: for planar molecules both are identical and the projection is
+    pure rounding cosmetics there. For non-planar molecules it really does turn
+    the axis away - in triazolam the C-Cl21 bond points 42.9 degrees out of the
+    best-fit plane, and the sigma view accordingly looked past the sigma hole
+    by 42.9 degrees. For the sigma view, therefore, use ``sigma_axis``.
     """
     coords = np.array([[a[1], a[2], a[3]] for a in atoms])
     znums = np.array([a[0] for a in atoms])
@@ -484,12 +482,12 @@ def molecular_frame(atoms, halogen_index=None):
         heavy = coords
     centered = heavy - heavy.mean(axis=0)
 
-    # Hauptachsen ueber Singulaerwertzerlegung
+    # principal axes via singular value decomposition
     _, sing, vt = np.linalg.svd(centered, full_matrices=False)
-    normal = vt[2]                                   # kleinste Ausdehnung
-    long_axis = vt[0]                                # groesste Ausdehnung
+    normal = vt[2]                                   # smallest extent
+    long_axis = vt[0]                                # largest extent
 
-    # C-Halogen-Achse suchen
+    # find the C-halogen axis
     axis = None
     hal_idx = [i for i, z in enumerate(znums) if z in HALOGENS]
     if hal_idx:
@@ -498,17 +496,17 @@ def molecular_frame(atoms, halogen_index=None):
         if carbons:
             d = np.linalg.norm(coords[carbons] - coords[hi], axis=1)
             ci = carbons[int(np.argmin(d))]
-            axis = coords[hi] - coords[ci]           # C -> X, zeigt zum sigma-Loch
+            axis = coords[hi] - coords[ci]           # C -> X, points at the sigma hole
 
     if axis is None:
         axis = long_axis.copy()
 
     axis = axis / np.linalg.norm(axis)
     normal = normal / np.linalg.norm(normal)
-    sigma_axis = axis.copy()                 # unveraendert, fuer die sigma-Ansicht
+    sigma_axis = axis.copy()                 # unchanged, for the sigma view
 
-    # axis in die Ebene legen - nur fuer pi und edge, die ein Rechtssystem
-    # mit der Normalen brauchen.
+    # project axis into the plane - only for pi and edge, which need a
+    # right-handed frame together with the normal.
     axis = axis - normal * float(np.dot(axis, normal))
     if np.linalg.norm(axis) < 1e-6:
         axis = long_axis
@@ -518,10 +516,10 @@ def molecular_frame(atoms, halogen_index=None):
 
 
 def view_matrix(forward, up):
-    """Rotationsmatrix fuer PyMOLs set_view.
+    """Rotation matrix for PyMOL's set_view.
 
-    ``forward`` zeigt vom Molekuel zur Kamera, ``up`` nach oben im Bild.
-    Zeilen der Matrix sind die Kamera-Basisvektoren im Weltsystem.
+    ``forward`` points from the molecule to the camera, ``up`` points up in the
+    image. The rows of the matrix are the camera basis vectors in world space.
     """
     z = np.asarray(forward, dtype=float)
     z = z / np.linalg.norm(z)
@@ -535,9 +533,9 @@ def view_matrix(forward, up):
     up = up / np.linalg.norm(up)
     right = np.cross(up, z)
     right = right / np.linalg.norm(right)
-    # PyMOL erwartet in set_view die Matrix, deren SPALTEN die
-    # Kamera-Basisvektoren im Weltsystem sind - also die Transponierte
-    # der Zeilenform. Empirisch geprueft (siehe SOP, Abschnitt Ansichten).
+    # In set_view PyMOL expects the matrix whose COLUMNS are the camera basis
+    # vectors in world space - that is, the transpose of the row form. Checked
+    # empirically (see the SOP, section on views).
     return np.array([right, up, z]).T
 
 
@@ -546,9 +544,9 @@ def view_matrix(forward, up):
 # ----------------------------------------------------------------------------
 
 def ensure_pymol():
-    """Liefert ``cmd``; startet PyMOL headless, falls noch nicht gestartet.
+    """Returns ``cmd``; starts PyMOL headless if it is not running yet.
 
-    So laeuft das Skript sowohl mit ``python render_esp.py ...`` als auch mit
+    That way the script runs both as ``python render_esp.py ...`` and as
     ``pymol -cq render_esp.py -- ...``.
     """
     import pymol
@@ -565,33 +563,33 @@ def ensure_pymol():
 def render_all(args):
     cmd = ensure_pymol()
 
-    # --- Daten fuer die Statistik ---------------------------------------
+    # --- data for the statistics ----------------------------------------
     dens, atoms, origin, voxel = read_cube(args.density)
     esp, _, _, _ = read_cube(args.esp)
     if dens.shape != esp.shape:
-        raise SystemExit("Dichte- und ESP-Cube haben unterschiedliche Gitter.")
+        raise SystemExit("Density and ESP cube are on different grids.")
 
     vmin, vmax, npts = esp_statistics(dens, esp, iso=args.iso)
     if npts == 0:
-        raise SystemExit(f"Keine Gitterpunkte bei rho = {args.iso} gefunden. "
-                         f"Isowert pruefen.")
+        raise SystemExit(f"No grid points found at rho = {args.iso}. "
+                         f"Check the isovalue.")
 
     if args.esp_range == "auto":
         rng = nice_range(vmin, vmax)
-        how = "automatisch aus den Daten"
+        how = "automatic, from the data"
     else:
         rng = float(args.esp_range)
-        how = "fest vorgegeben"
+        how = "fixed"
 
-    # Regionsaufgeloeste Kennwerte: das globale Maximum sitzt bei Arylhalogeniden
-    # auf den Ring-Wasserstoffen, nicht auf dem Halogen.
+    # Region-resolved values: for aryl halides the global maximum sits on the
+    # ring hydrogens, not on the halogen.
     pos, vals = shell_points(dens, esp, origin, voxel, iso=args.iso)
     loc = local_extrema(pos, vals, atoms)
 
-    # Das sigma-Loch wird bevorzugt ueber Strahlen mit Interpolation bestimmt.
-    # Die punktbasierte Variante haengt davon ab, ob zufaellig ein Gitterpunkt
-    # nahe der C-X-Achse UND in der duennen Isoschale liegt; bei Brombenzol
-    # ergibt sie auf demselben Gitter +7.9 statt +10.1 kcal/(mol*e).
+    # The sigma hole is preferably determined by rays with interpolation. The
+    # point-based variant depends on whether a grid point happens to lie near
+    # the C-X axis AND inside the thin isosurface shell; for bromobenzene it
+    # gives +7.9 instead of +10.1 kcal/(mol*e) on the same grid.
     ray = sigma_hole_interpolated(dens, esp, origin, voxel, atoms, iso=args.iso)
     for e in loc.get("halogens", []):
         if e["index"] in ray:
@@ -604,80 +602,80 @@ def render_all(args):
         return (f"{v:+.4f} a.u.  = {v*HARTREE_TO_KJ:+7.1f} kJ/(mol*e)"
                 f"  = {v*HARTREE_TO_KCAL:+6.1f} kcal/(mol*e)")
 
-    print(f"  ESP auf der rho={args.iso}-Schale ({npts} Punkte):")
-    print(f"    V_S,min = {_fmt(vmin)}   auf "
+    print(f"  ESP on the rho = {args.iso} shell ({npts} points):")
+    print(f"    V_S,min = {_fmt(vmin)}   on "
           f"{ansi.atom_label(loc.get('vmin_atom', '?'))}")
-    print(f"    V_S,max = {_fmt(vmax)}   auf "
+    print(f"    V_S,max = {_fmt(vmax)}   on "
           f"{ansi.atom_label(loc.get('vmax_atom', '?'))}")
-    # Pro Halogen ein Block. Bei genau einem Halogen ist die Ausgabe dieselbe
-    # wie vorher; ab zwei bekommt jedes seine eigene Zeile, und das Halogen,
-    # auf das die sigma-Ansicht blickt, ist markiert.
+    # One block per halogen. With exactly one halogen the output is the same
+    # as before; from two on, each gets its own line, and the halogen the sigma
+    # view looks at is marked.
     for e in hals:
         if "sigma_max" not in e:
-            print(f"  Lokal am Halogen ({ansi.element(e['symbol'])}"
-                  f" {e['index'] + 1}): kein auswertbares sigma-Loch "
-                  f"(zu wenige Oberflaechenpunkte in der Kappe)")
+            print(f"  Local at the halogen ({ansi.element(e['symbol'])}"
+                  f" {e['index'] + 1}): no evaluable sigma hole "
+                  f"(too few surface points in the cap)")
             continue
-        head = (f"  Lokal am Halogen ({ansi.element(e['symbol'])}):"
+        head = (f"  Local at the halogen ({ansi.element(e['symbol'])}):"
                 if len(hals) == 1
-                else f"  Lokal an {ansi.atom_label(e['label'])}:")
+                else f"  Local at {ansi.atom_label(e['label'])}:")
         if len(hals) > 1 and e is hals[0]:
-            head += "   <- Achse der sigma-Ansicht"
+            head += "   <- axis of the sigma view"
         print(head)
-        tag = e.get("sigma_method", "punktbasiert")
-        extra = (f"   [{tag}, {e['sigma_angle']:.1f} Grad zur Achse]"
+        tag = e.get("sigma_method", "point-based")
+        extra = (f"   [{tag}, {e['sigma_angle']:.1f} degrees off the axis]"
                  if "sigma_angle" in e
-                 else f"   [{tag}, {e.get('sigma_points', 0)} Punkte]")
-        print(f"    sigma-Loch  = {_fmt(e['sigma_max'])}{extra}")
+                 else f"   [{tag}, {e.get('sigma_points', 0)} points]")
+        print(f"    sigma hole  = {_fmt(e['sigma_max'])}{extra}")
         if "belt_min" in e:
-            print(f"    Guertel     = {_fmt(e['belt_min'])}"
-                  f"   [{e['belt_points']} Punkte]")
+            print(f"    belt        = {_fmt(e['belt_min'])}"
+                  f"   [{e['belt_points']} points]")
     if hals and any("sigma_max" in e for e in hals):
-        # Auch das Strahlverfahren kann die Isoflaeche auf einem groben Gitter
-        # nur so genau lokalisieren, wie die Dichte dort aufgeloest ist.
+        # The ray method, too, can only locate the isosurface on a coarse grid
+        # as precisely as the density is resolved there.
         if spacing > 0.30:
-            print(f"    ! Gitterabstand {spacing:.2f} Bohr - fuer einen "
-                  f"belastbaren sigma-Loch-Wert zu grob;")
-            print(f"      erwartungsgemaess einige Prozent zu niedrig. "
-                  f"Feiner rechnen (kleineres --stride).")
-        # Hinweis, dass V_S,max nicht auf dem Halogen liegt: bewusst nicht
-        # ausgegeben. Bei Arylhalogeniden trifft das praktisch immer zu, die
-        # Meldung waere also bei jedem Molekuel identisch und damit wertlos.
-        # Die Information steckt bereits in der Ortsangabe hinter V_S,max
-        # ("auf H5") und im separat ausgewiesenen sigma-Loch. Erklaerung dazu
-        # in docs/ESP_Visualization_Background.docx, Abschnitt 2.1
+            print(f"    ! grid spacing {spacing:.2f} Bohr - too coarse for a "
+                  f"trustworthy sigma-hole value;")
+            print(f"      expect it to be a few per cent low. Compute finer "
+                  f"(a smaller --stride).")
+        # A note that V_S,max does not sit on the halogen is deliberately not
+        # printed. For aryl halides that is practically always the case, so the
+        # message would be identical for every molecule and therefore
+        # worthless. The information is already in the location behind V_S,max
+        # ("on H5") and in the separately reported sigma hole. Explained in
+        # docs/ESP_Visualization_Background.docx, section 2.1
         # "Which number describes the sigma-hole - Not V_S,max".
-    print(f"  Farbskala: +/- {rng:.3f} a.u. ({how})"
-          + ("   [Regenbogen]" if args.rainbow else ""))
+    print(f"  Colour scale: +/- {rng:.3f} a.u. ({how})"
+          + ("   [rainbow]" if args.rainbow else ""))
     if args.esp_range == "auto":
-        print("  ! Fuer den Vergleich mehrerer Molekuele diesen Wert fixieren:")
+        print("  ! To compare several molecules, fix this value:")
         print(f"      --esp-range {rng:.3f}")
 
-    # --- Orientierung ---------------------------------------------------
-    # Bei mehreren Halogenen blickt die sigma-Ansicht auf das staerkste
-    # sigma-Loch - nicht auf das erste Halogen in der Atomliste.
+    # --- orientation ----------------------------------------------------
+    # With several halogens the sigma view looks at the strongest sigma hole -
+    # not at the first halogen in the atom list.
     normal, axis, sigma_axis, center = molecular_frame(
-        atoms, halogen_index=loc.get("halogen_index"))  # Bohr (Cube-Einheiten)
-    center_ang = center / BOHR_PER_ANGSTROM           # PyMOL rechnet in Angstrom
+        atoms, halogen_index=loc.get("halogen_index"))  # Bohr (cube units)
+    center_ang = center / BOHR_PER_ANGSTROM           # PyMOL works in Angstrom
 
     views = {
-        # Blick senkrecht auf die Ebene; C-X-Achse zeigt nach unten
+        # looking perpendicular onto the plane; C-X axis points down
         "pi":    view_matrix(forward=normal, up=-axis),
-        # Blick in der Ebene, senkrecht zur C-X-Achse; C-X-Achse waagerecht
+        # looking in the plane, perpendicular to the C-X axis; C-X horizontal
         "edge":  view_matrix(forward=np.cross(normal, axis), up=normal),
-        # Blick von aussen entlang der ECHTEN C-X-Achse auf das sigma-Loch.
-        # Nicht die in die Ebene projizierte Achse verwenden - bei nicht
-        # planaren Molekuelen zeigt die am sigma-Loch vorbei.
+        # looking in from outside along the TRUE C-X axis onto the sigma hole.
+        # Do not use the axis projected into the plane - for non-planar
+        # molecules it points past the sigma hole.
         "sigma": view_matrix(forward=sigma_axis, up=normal),
     }
     tilt = float(np.degrees(np.arccos(min(1.0, abs(np.dot(sigma_axis, normal))))))
-    tilt = abs(90.0 - tilt)          # Neigung der C-X-Achse gegen die Ebene
+    tilt = abs(90.0 - tilt)          # tilt of the C-X axis against the plane
     if hals and tilt > 15.0:
-        print(f"  Hinweis: die C-X-Achse von {hals[0]['label']} steht "
-              f"{tilt:.0f} Grad aus der Ausgleichsebene heraus;")
-        print(f"    sigma-Ansicht folgt der echten Bindungsachse, "
-              f"pi/edge der Ebene.")
-    # --- PyMOL-Szene ----------------------------------------------------
+        print(f"  Note: the C-X axis of {hals[0]['label']} points "
+              f"{tilt:.0f} degrees out of the best-fit plane;")
+        print(f"    the sigma view follows the true bond axis, "
+              f"pi/edge the plane.")
+    # --- PyMOL scene ----------------------------------------------------
     cmd.reinitialize()
     cmd.set("auto_zoom", 0)
 
@@ -695,7 +693,7 @@ def render_all(args):
     levels, ramp_colors = ramp_levels(rng, args.rainbow)
     cmd.ramp_new("espramp", "esp", levels, ramp_colors)
     cmd.set("surface_color", "espramp", "surf")
-    cmd.disable("espramp")                 # Balken nicht ins Bild rendern
+    cmd.disable("espramp")                 # keep the bar out of the image
 
     cmd.set("transparency", args.transparency)
     cmd.set("transparency_mode", 2)
@@ -705,11 +703,11 @@ def render_all(args):
     cmd.set("ambient", 0.15)
     cmd.set("ray_opaque_background", 1)
     cmd.set("antialias", 2)
-    cmd.set("orthoscopic", 1)              # keine Perspektive -> vergleichbar
+    cmd.set("orthoscopic", 1)              # no perspective -> comparable
 
     outdir = args.outdir or "."
-    # Eigener Namensanhang, sonst ueberschreibt ein Regenbogenlauf den
-    # rot-weiss-blauen Bildersatz desselben Molekuels.
+    # Its own name suffix, otherwise a rainbow run overwrites the
+    # red-white-blue image set of the same molecule.
     cmap_tag = "_rainbow" if args.rainbow else ""
     os.makedirs(outdir, exist_ok=True)
     written = []
@@ -721,9 +719,9 @@ def render_all(args):
             v[0:9] = [float(x) for x in R.flatten()]
             v[12:15] = [float(x) for x in center_ang]
             cmd.set_view(v)
-            # Auf das Molekuel zoomen, NICHT auf "surf": das Isoflaechen-
-            # Objekt traegt die Ausdehnung der gesamten Gitterbox mit sich
-            # und wuerde das Motiv winzig erscheinen lassen.
+            # Zoom on the molecule, NOT on "surf": the isosurface object
+            # carries the extent of the whole grid box with it and would leave
+            # the subject looking tiny.
             cmd.zoom("mol", BUFFER_ANGSTROM)
 
             suffix = f"_{bg}" if len(args.backgrounds) > 1 else ""
@@ -733,7 +731,7 @@ def render_all(args):
             written.append(png)
             print(f"    -> {png}")
 
-    # --- Farbskala als eigenes Bild -------------------------------------
+    # --- colour bar as a separate image ---------------------------------
     bar = None
     try:
         bar = colorbar(os.path.join(outdir, f"{args.prefix}{cmap_tag}_colorbar.png"),
@@ -741,55 +739,55 @@ def render_all(args):
         written.append(bar)
         print(f"    -> {bar}")
     except ImportError:
-        print("    (matplotlib fehlt - Farbskala wird uebersprungen; "
-              "'conda install matplotlib' zum Aktivieren)")
+        print("    (matplotlib is missing - the colour bar is skipped; "
+              "'conda install matplotlib' to enable it)")
 
-    # --- Protokoll ------------------------------------------------------
+    # --- record ---------------------------------------------------------
     settings = os.path.join(outdir, f"{args.prefix}{cmap_tag}_settings.txt")
     with open(settings, "w", encoding="utf-8") as fh:
-        fh.write("Renderparameter (erzeugt von render_esp.py)\n")
+        fh.write("Render parameters (written by render_esp.py)\n")
         fh.write("=" * 55 + "\n")
-        fh.write(f"Struktur          : {args.struct}\n")
-        fh.write(f"Dichte-Cube       : {args.density}\n")
-        fh.write(f"ESP-Cube          : {args.esp}\n")
-        fh.write(f"Gitter            : {dens.shape[0]} x {dens.shape[1]} "
+        fh.write(f"Structure         : {args.struct}\n")
+        fh.write(f"Density cube      : {args.density}\n")
+        fh.write(f"ESP cube          : {args.esp}\n")
+        fh.write(f"Grid              : {dens.shape[0]} x {dens.shape[1]} "
                  f"x {dens.shape[2]}\n")
-        fh.write(f"Isowert rho       : {args.iso} a.u.\n")
+        fh.write(f"Isovalue rho      : {args.iso} a.u.\n")
         fh.write(f"V_S,min           : {vmin:+.5f} a.u. "
-                 f"({vmin*HARTREE_TO_KCAL:+.2f} kcal/(mol*e))  auf "
+                 f"({vmin*HARTREE_TO_KCAL:+.2f} kcal/(mol*e))  on "
                  f"{loc.get('vmin_atom','?')}\n")
         fh.write(f"V_S,max           : {vmax:+.5f} a.u. "
-                 f"({vmax*HARTREE_TO_KCAL:+.2f} kcal/(mol*e))  auf "
+                 f"({vmax*HARTREE_TO_KCAL:+.2f} kcal/(mol*e))  on "
                  f"{loc.get('vmax_atom','?')}\n")
-        # Eine Zeile pro Halogen, absteigend nach sigma-Loch sortiert.
+        # One line per halogen, sorted by sigma hole, descending.
         for e in hals:
             tag = f"({e['label']})"
             if "sigma_max" not in e:
-                fh.write(f"sigma-Loch {tag:<7}: "
-                         f"nicht auswertbar (zu wenige Punkte)\n")
+                fh.write(f"sigma hole {tag:<7}: "
+                         f"not evaluable (too few points)\n")
                 continue
-            fh.write(f"sigma-Loch {tag:<7}: "
+            fh.write(f"sigma hole {tag:<7}: "
                      f"{e['sigma_max']:+.5f} a.u. "
                      f"({e['sigma_max']*HARTREE_TO_KCAL:+.2f} kcal/(mol*e))"
-                     f"  [{e.get('sigma_method','punktbasiert')}]\n")
+                     f"  [{e.get('sigma_method','point-based')}]\n")
             if "belt_min" in e:
-                fh.write(f"Guertel    {tag:<7}: "
+                fh.write(f"belt       {tag:<7}: "
                          f"{e['belt_min']:+.5f} a.u. "
                          f"({e['belt_min']*HARTREE_TO_KCAL:+.2f} kcal/(mol*e))\n")
         if len(hals) > 1:
-            fh.write(f"sigma-Ansicht auf : {hals[0]['label']} "
-                     f"(staerkstes sigma-Loch)\n")
-        fh.write(f"Gitterabstand     : {spacing:.4f} Bohr\n")
-        fh.write(f"Farbskala         : -{rng:.4f} .. +{rng:.4f} a.u. ({how})\n")
-        ramp_name = ("Regenbogen (rot-gelb-gruen-cyan-blau)" if args.rainbow
-                     else "rot-weiss-blau")
-        fh.write(f"Farbrampe         : {ramp_name}\n")
-        fh.write(f"Transparenz       : {args.transparency}\n")
-        fh.write(f"Hintergrund       : {', '.join(args.backgrounds)}\n")
-        fh.write(f"Bildgroesse       : {args.width} x {args.height} px, "
+            fh.write(f"sigma view on     : {hals[0]['label']} "
+                     f"(strongest sigma hole)\n")
+        fh.write(f"Grid spacing      : {spacing:.4f} Bohr\n")
+        fh.write(f"Colour scale      : -{rng:.4f} .. +{rng:.4f} a.u. ({how})\n")
+        ramp_name = ("rainbow (red-yellow-green-cyan-blue)" if args.rainbow
+                     else "red-white-blue")
+        fh.write(f"Colour ramp       : {ramp_name}\n")
+        fh.write(f"Transparency      : {args.transparency}\n")
+        fh.write(f"Background        : {', '.join(args.backgrounds)}\n")
+        fh.write(f"Image size        : {args.width} x {args.height} px, "
                  f"{args.dpi} dpi\n")
-        fh.write(f"Projektion        : orthoskopisch\n")
-        fh.write(f"Ansichten         : {', '.join(views.keys())}\n")
+        fh.write(f"Projection        : orthoscopic\n")
+        fh.write(f"Views             : {', '.join(views.keys())}\n")
     print(f"    -> {settings}")
 
     return {
@@ -810,11 +808,11 @@ def render_all(args):
         "n_halogens": len(hals),
         "sigma_max": loc.get("sigma_max"),
         "sigma_points": loc.get("sigma_points"),
-        "sigma_method": loc.get("sigma_method", "punktbasiert"),
+        "sigma_method": loc.get("sigma_method", "point-based"),
         "sigma_angle": loc.get("sigma_angle"),
         "belt_min": loc.get("belt_min"),
-        # Alle Halogene, absteigend nach sigma-Loch. Die flachen Felder oben
-        # beziehen sich auf halogens[0].
+        # All halogens, descending by sigma hole. The flat fields above refer
+        # to halogens[0].
         "halogens": [{k: v for k, v in e.items() if k not in ("pos", "axis")}
                      for e in hals],
         "files": written,
@@ -823,7 +821,7 @@ def render_all(args):
 
 
 def colorbar(path, rng, dpi=300, rainbow=False):
-    """Waagerechte Farbskala als separates PNG (braucht matplotlib)."""
+    """Horizontal colour bar as a separate PNG (needs matplotlib)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -834,8 +832,9 @@ def colorbar(path, rng, dpi=300, rainbow=False):
     cmap = LinearSegmentedColormap.from_list(
         "esp", RAMP_HEX["rainbow" if rainbow else "redblue"])
 
-    # Hoehe grosszuegig plus bbox_inches="tight" beim Speichern: sonst wird die
-    # Achsenbeschriftung unten abgeschnitten, was im gerenderten README auffaellt.
+    # A generous height plus bbox_inches="tight" when saving: otherwise the
+    # axis labels at the bottom are cut off, which shows in the rendered
+    # README.
     fig = plt.figure(figsize=(4.2, 0.95))
     ax = fig.add_axes([0.06, 0.50, 0.88, 0.26])
     cb = ColorbarBase(ax, cmap=cmap, norm=Normalize(-rng, rng),
@@ -863,31 +862,31 @@ def autodetect(pattern_list):
 
 def main(argv):
     p = argparse.ArgumentParser(
-        description="Standardisierte ESP-Bilder aus Cube-Dateien rendern.")
-    p.add_argument("--density", default=None, help="Cube der Elektronendichte")
-    p.add_argument("--esp", default=None, help="Cube des ESP")
+        description="Render a standardised set of ESP images from cube files.")
+    p.add_argument("--density", default=None, help="cube of the electron density")
+    p.add_argument("--esp", default=None, help="cube of the ESP")
     p.add_argument("--struct", default=None,
-                   help="Strukturdatei (.mol/.sdf/.xyz)")
-    p.add_argument("--prefix", default=None, help="Praefix der Bildnamen")
-    p.add_argument("--outdir", default="images", help="Ausgabeordner")
+                   help="structure file (.mol/.sdf/.xyz)")
+    p.add_argument("--prefix", default=None, help="prefix of the image names")
+    p.add_argument("--outdir", default="images", help="output folder")
     p.add_argument("--iso", type=float, default=0.001,
-                   help="Isowert der Dichteflaeche in a.u. (Standard 0.001)")
+                   help="isovalue of the density surface in a.u. (default 0.001)")
     p.add_argument("--esp-range", default="auto",
-                   help="'auto' oder fester Wert in a.u., z.B. 0.03")
+                   help="'auto' or a fixed value in a.u., e.g. 0.03")
     p.add_argument("--transparency", type=float, default=0.15,
-                   help="Oberflaechentransparenz 0..1 (Standard 0.15). "
-                        "0 = opak, klarste Farben; 0.3+ macht die Profil- "
-                        "und Frontalansichten unleserlich, weil man durch "
-                        "das ganze Molekuel hindurchschaut.")
+                   help="surface transparency 0..1 (default 0.15). "
+                        "0 = opaque, clearest colours; 0.3+ makes the profile "
+                        "and axial views unreadable, because you look through "
+                        "the whole molecule.")
     p.add_argument("--backgrounds", nargs="+", default=["white"],
-                   help="Hintergrundfarben, z.B. white black")
+                   help="background colours, e.g. white black")
     p.add_argument("--width", type=int, default=2000)
     p.add_argument("--height", type=int, default=1600)
     p.add_argument("--dpi", type=int, default=300)
     p.add_argument("--rainbow", action="store_true",
-                   help="Regenbogen-Farbrampe statt rot-weiss-blau. Rot bleibt "
-                        "negativ, blau positiv; Gelb/Gruen/Cyan liegen "
-                        "dazwischen. Schreibt einen eigenen Bildersatz "
+                   help="rainbow colour ramp instead of red-white-blue. Red "
+                        "stays negative, blue positive; yellow/green/cyan lie "
+                        "in between. Writes an image set of its own, "
                         "<prefix>_rainbow_*.png")
     p.add_argument("--no-color", action="store_true",
                    help="plain terminal output without ANSI colours (same effect as "
@@ -906,41 +905,42 @@ def main(argv):
                               ("--esp", args.esp),
                               ("--struct", args.struct)) if not v]
     if missing:
-        raise SystemExit("Fehlende Eingaben: " + ", ".join(missing))
+        raise SystemExit("Missing inputs: " + ", ".join(missing))
 
     if not args.prefix:
         base = os.path.splitext(os.path.basename(args.struct))[0]
         args.prefix = base.split("_")[0] or "molecule"
 
     print("=" * 70)
-    print("render_esp.py - standardisierte ESP-Bilder")
+    print("render_esp.py - standardised ESP images")
     print("=" * 70)
-    print(f"  Struktur : {args.struct}")
-    print(f"  Dichte   : {args.density}")
-    print(f"  ESP      : {args.esp}")
-    print(f"  Praefix  : {args.prefix}")
+    print(f"  structure : {args.struct}")
+    print(f"  density   : {args.density}")
+    print(f"  ESP       : {args.esp}")
+    print(f"  prefix    : {args.prefix}")
 
     render_all(args)
-    print("Fertig.")
+    print("Done.")
     return 0
 
 
-# Ausfuehren, sobald das Skript NICHT als Modul importiert wird.
+# Run as soon as the script is NOT imported as a module.
 #
-# Warum nicht das uebliche  if __name__ == "__main__"  ?
-# PyMOL fuehrt uebergebene .py-Dateien mit exec() in einem eigenen Namensraum
-# aus, in dem __name__ eben nicht "__main__" ist. Mit der Standardabfrage
-# passiert bei  pymol -cq render_esp.py -- ...  schlicht gar nichts:
-# das Skript wird gelesen, alle Funktionen werden definiert, und dann ist
-# Schluss - ohne Fehlermeldung. Genau diese stille Nicht-Ausfuehrung ist
-# schwer zu diagnostizieren, deshalb hier die umgekehrte Abfrage.
+# Why not the usual  if __name__ == "__main__"  ?
+# PyMOL executes .py files passed to it with exec() in a namespace of its own,
+# in which __name__ is precisely not "__main__". With the standard check,
+# nothing at all happens on  pymol -cq render_esp.py -- ... : the script is
+# read, all functions are defined, and that is the end of it - without an error
+# message. That silent non-execution is hard to diagnose, hence the inverted
+# check here.
 if __name__ != "render_esp":
     _argv = sys.argv[1:]
-    if "--" in _argv:                  # Aufruf ueber: pymol -cq skript.py -- ...
+    if "--" in _argv:                  # called as: pymol -cq script.py -- ...
         _argv = _argv[_argv.index("--") + 1:]
     else:
-        # PyMOL schiebt beim Start eigene Argumente in sys.argv. Alles vor
-        # der Skriptdatei wegwerfen, damit argparse nicht darueber stolpert.
+        # On start-up PyMOL pushes arguments of its own into sys.argv. Throw
+        # away everything before the script file, so that argparse does not
+        # trip over it.
         for _i, _a in enumerate(_argv):
             if _a.endswith("render_esp.py"):
                 _argv = _argv[_i + 1:]

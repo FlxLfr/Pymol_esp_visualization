@@ -4,30 +4,29 @@
 stride_sweep.py
 ===============
 
-Belegt die Wahl von ``--stride`` mit Messwerten statt mit einem Bauchgefuehl.
+Backs the choice of ``--stride`` with measurements instead of a gut feeling.
 
-Fuer jeden Stride wird dasselbe gemacht, was ``xyzToCube.py --stride N`` mit den
-Cube-Dateien tut - jeden N-ten Gitterpunkt pro Achse behalten, Voxelvektoren
-entsprechend strecken - und anschliessend werden die Kennwerte mit denselben
-Funktionen bestimmt, die auch ``render_esp.py`` benutzt. Dadurch stehen in der
-Tabelle exakt die Zahlen, die der Workflow selbst ausgeben wuerde; es gibt keine
-zweite, abweichende Implementierung.
+For every stride it does the same thing ``xyzToCube.py --stride N`` does to the
+cube files - keep every N-th grid point per axis, stretch the voxel vectors
+accordingly - and then determines the statistics with the same functions
+``render_esp.py`` uses. The table therefore holds exactly the numbers the
+workflow itself would report; there is no second, diverging implementation.
 
-Warum nicht die pointval-Dateien N-mal neu konvertieren: das Ergebnis waere
-dasselbe (write_cube dezimiert genau so), aber jeder Durchlauf muesste 1.25 GB
-Text parsen. Aus den fertigen Cubes ist derselbe Test in Sekunden erledigt.
+Why not reconvert the pointval files N times: the result would be the same
+(write_cube decimates in exactly this way), but every pass would have to parse
+1.25 GB of text. From the finished cubes the same test is done in seconds.
 
-Aufruf::
+Call::
 
     cd tools
     python stride_sweep.py --folder ../sandbox/brombenzol
 
-Ergebnis: Tabelle auf der Konsole und ``stride_sweep_<ordner>.csv`` daneben.
-Die Tabelle in Abschnitt 4.2 der Hintergrunddokumentation stammt aus diesem
-Skript.
+Result: a table on the console and ``stride_sweep_<folder>.csv`` next to the
+cube files. The table in section 4.2 of the background document comes from this
+script.
 
-Gebraucht werden nur numpy und die Skripte in ../scripts - kein PyMOL: das wird
-in render_esp.py erst in ensure_pymol() importiert.
+Only numpy and the scripts in ../scripts are needed - no PyMOL: render_esp.py
+imports that only inside ensure_pymol().
 """
 
 from __future__ import annotations
@@ -49,38 +48,37 @@ from constants import HARTREE_TO_KCAL                           # noqa: E402
 
 
 def cube_bytes(n, natoms, newline=2):
-    """Groesse der Cube-Datei, die write_cube fuer dieses Gitter schreiben wuerde.
+    """Size of the cube file write_cube would produce for this grid.
 
-    Rechnung statt Messung, weil allein die Datei fuer Stride 1 rund 200 MB
-    Schreiblast waere - fuer eine Tabellenspalte ist das nicht angemessen.
+    Computed rather than measured, because the file for stride 1 alone would be
+    about 200 MB of write load - not appropriate for one table column.
 
-    write_cube schreibt pro (x, y)-Paar die nz Werte mit ``%13.5E`` und bricht
-    nach je sechs Werten um; Kopf sind 2 Kommentarzeilen, 1 Ursprungszeile,
-    3 Achsenzeilen und je Atom eine Zeile. ``newline`` ist die Laenge des
-    Zeilenumbruchs, den der Textmodus daraus macht: 2 unter Windows (CRLF),
-    1 unter Linux/macOS.
+    write_cube writes the nz values per (x, y) pair with ``%13.5E`` and breaks
+    the line after every six; the header is 2 comment lines, 1 origin line,
+    3 axis lines and one line per atom. ``newline`` is the length of the line
+    break the text mode turns that into: 2 on Windows (CRLF), 1 on
+    Linux/macOS.
 
-    Der Datenteil ist exakt. Im Kopf sind nur die zwei Kommentarzeilen
-    variabel, weil der Name der Quelldatei darin steht; sie werden mit
-    35 Zeichen veranschlagt. Geprueft an sandbox/brombenzol/td.cube
-    (251^3, 12 Atome, unter Windows geschrieben): berechnet 210_865_313,
-    gemessen 210_865_313 Byte. Bei anderen Dateinamen weicht der Kopf um
-    einige Byte ab - auf 201 MB ohne Bedeutung.
+    The data part is exact. In the header only the two comment lines vary,
+    because the name of the source file appears in them; they are estimated at
+    35 characters. Checked against sandbox/brombenzol/td.cube (251^3, 12 atoms,
+    written on Windows): computed 210_865_313, measured 210_865_313 bytes. With
+    other file names the header differs by a few bytes - immaterial at 201 MB.
     """
     nx, ny, nz = n
-    lines_per_row = -(-nz // 6)                       # aufgerundet
+    lines_per_row = -(-nz // 6)                       # rounded up
     body = nx * ny * (nz * 13 + lines_per_row * newline)
-    # Kopf: 2 Kommentarzeilen, 1 Atomzahlzeile, 3 Achsenzeilen, je Atom 1 Zeile
-    # Zeilenlaengen aus den Formatstrings in write_cube: Ursprungs- und
-    # Achsenzeilen 44 Zeichen, Atomzeilen 57. Die zwei Kommentarzeilen haengen
-    # vom Dateinamen ab und werden mit 35 Zeichen veranschlagt.
+    # Header: 2 comment lines, 1 atom-count line, 3 axis lines, 1 line per
+    # atom. Line lengths from the format strings in write_cube: origin and axis
+    # lines 44 characters, atom lines 57. The two comment lines depend on the
+    # file name and are estimated at 35 characters.
     header = (4 * (44 + newline) + natoms * (57 + newline)
               + 2 * (35 + newline))
     return body + header
 
 
 def measure(dens, esp, atoms, origin, voxel, stride, iso):
-    """Kennwerte fuer ein um ``stride`` dezimiertes Gitter."""
+    """The statistics for a grid decimated by ``stride``."""
     d = np.ascontiguousarray(dens[::stride, ::stride, ::stride])
     e = np.ascontiguousarray(esp[::stride, ::stride, ::stride])
     v = voxel * stride
@@ -121,18 +119,18 @@ def measure(dens, esp, atoms, origin, voxel, stride, iso):
 def main(argv=None):
     here = os.path.dirname(os.path.abspath(__file__))
     p = argparse.ArgumentParser(
-        description="Gitteraufloesung (--stride) gegen die gemessenen "
-                    "Kennwerte auftragen.")
+        description="Plot the grid resolution (--stride) against the measured "
+                    "statistics.")
     p.add_argument("--folder", default=os.path.join(here, "..", "sandbox",
                                                     "brombenzol"),
-                   help="Molekuelordner mit td.cube und tp.cube "
-                        "(Standard: ../sandbox/brombenzol)")
+                   help="molecule folder with td.cube and tp.cube "
+                        "(default: ../sandbox/brombenzol)")
     p.add_argument("--strides", type=int, nargs="+", default=[1, 2, 3, 4, 6, 8],
-                   help="zu testende Stride-Werte (Standard: 1 2 3 4 6 8)")
+                   help="stride values to test (default: 1 2 3 4 6 8)")
     p.add_argument("--iso", type=float, default=0.001,
-                   help="Isowert, ueber alle Strides fest (Standard: 0.001)")
+                   help="isovalue, fixed across all strides (default: 0.001)")
     p.add_argument("--out", default=None,
-                   help="CSV-Ausgabe (Standard: stride_sweep_<ordner>.csv "
+                   help="CSV output (default: stride_sweep_<folder>.csv "
                         "neben den Cube-Dateien)")
     args = p.parse_args(argv)
 
@@ -140,16 +138,16 @@ def main(argv=None):
     name = os.path.basename(os.path.normpath(folder))
     out = args.out or os.path.join(folder, f"stride_sweep_{name}.csv")
 
-    print(f"lese {os.path.join(folder, 'td.cube')} ...", flush=True)
+    print(f"reading {os.path.join(folder, 'td.cube')} ...", flush=True)
     dens, atoms, origin, voxel = R.read_cube(os.path.join(folder, "td.cube"))
     gc.collect()
-    print(f"lese {os.path.join(folder, 'tp.cube')} ...", flush=True)
+    print(f"reading {os.path.join(folder, 'tp.cube')} ...", flush=True)
     esp, _, _, _ = R.read_cube(os.path.join(folder, "tp.cube"))
     gc.collect()
     if dens.shape != esp.shape:
-        raise SystemExit("Dichte- und ESP-Cube haben unterschiedliche Gitter.")
-    print(f"Gitter {'x'.join(map(str, dens.shape))}, {len(atoms)} Atome, "
-          f"Isowert {args.iso}\n", flush=True)
+        raise SystemExit("Density and ESP cube are on different grids.")
+    print(f"grid {'x'.join(map(str, dens.shape))}, {len(atoms)} atoms, "
+          f"isovalue {args.iso}\n", flush=True)
 
     rows = [measure(dens, esp, atoms, origin, voxel, s, args.iso)
             for s in args.strides]

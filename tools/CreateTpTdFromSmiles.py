@@ -4,36 +4,36 @@
 CreateTpTdFromSmiles.py
 =======================
 
-Erzeugt Testdatensaetze fuer den ESP-Workflow aus einem SMILES-String.
+Produces test datasets for the ESP workflow from a SMILES string.
 
-Ausgabe pro Molekuel ist ein Ordner mit genau den Dateien, die auch aus einem
-Turbomole-Lauf kommen::
+The output per molecule is a folder holding exactly the files that come out of
+a Turbomole run::
 
     <name>/
-        td.xyz        Elektronendichte, Turbomole-pointval-Format
-        tp.xyz        elektrostatisches Potential, dasselbe Format
-        <name>.mol    Struktur (MDL-Molfile, Angstrom)
+        td.xyz        electron density, Turbomole pointval format
+        tp.xyz        electrostatic potential, the same format
+        <name>.mol    structure (MDL molfile, Angstrom)
 
-Der Ordner laesst sich direkt nach ``sandbox/`` legen; ``run_all.py`` findet ihn
-dort und die Pipeline laeuft ab ``xyzToCube.py`` unveraendert durch. Das ist
-Absicht: wuerden hier gleich Cube-Dateien geschrieben, bliebe der Konverter
-samt Einheitenumrechnung und Index-Umsortierung ungetestet - also genau der
-Teil, der am ehesten bricht.
+The folder can be dropped straight into ``sandbox/``; ``run_all.py`` finds it
+there and the pipeline runs through unchanged from ``xyzToCube.py`` on. That is
+deliberate: if cube files were written here directly, the converter with its
+unit conversion and index reordering would stay untested - precisely the part
+most likely to break.
 
-Ablauf::
+Flow::
 
-    SMILES --RDKit--> 3D-Geometrie --PySCF--> Dichtematrix --> rho(r), V(r)
+    SMILES --RDKit--> 3D geometry --PySCF--> density matrix --> rho(r), V(r)
 
-Details, Parameterwahl und Einschraenkungen stehen in ``README.txt`` im selben
-Ordner. Kurzfassung: das sind **Testfixtures, keine Referenzdaten**.
+Details, choice of parameters and limitations are in ``README.txt`` in the same
+folder. In short: these are **test fixtures, not reference data**.
 
-Aufruf
-------
+Call
+----
     python CreateTpTdFromSmiles.py --preset
     python CreateTpTdFromSmiles.py --smiles "CC(=O)c1ccc(Br)cc1" --name bromacetophenon
     python CreateTpTdFromSmiles.py --preset --spacing 0.35 --margin 3.0
 
-Abhaengigkeiten: rdkit, pyscf, numpy (siehe environment-testdata.yml).
+Dependencies: rdkit, pyscf, numpy (see environment-testdata.yml).
 """
 
 from __future__ import annotations
@@ -45,57 +45,58 @@ import time
 
 import numpy as np
 
-# Denselben Umrechnungsfaktor benutzen wie die Pipeline in scripts/. Waeren es
-# zwei Werte, saessen die Atome des erzeugten .mol minimal anders als das
-# erzeugte Gitter - unsichtbar im Bild, falsch in den Zahlen. scripts/constants
-# hat bewusst keine Abhaengigkeiten, laesst sich also auch aus der separaten
-# esp-testdata-Umgebung importieren.
+# Use the same conversion factor as the pipeline in scripts/. Were there two
+# values, the atoms of the generated .mol would sit slightly differently from
+# the generated grid - invisible in the picture, wrong in the numbers.
+# scripts/constants deliberately has no dependencies and can therefore be
+# imported from the separate esp-testdata environment as well.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 os.pardir, "scripts"))
 from constants import BOHR_PER_ANGSTROM  # noqa: E402
 
-# Eingebaute Testfaelle. Bewusst so gewaehlt, dass sie die Luecken abdecken,
-# die drei fast identische Halogenbenzole offenlassen.
+# Built-in test cases. Chosen deliberately to cover the gaps that three nearly
+# identical halobenzenes leave open.
 PRESETS = [
-    # Halogen UND Carbonyl: V_S,min muss auf den Carbonyl-Sauerstoff wandern,
-    # waehrend der Guertelwert am Brom bleibt. Erst hier laufen die beiden
-    # Kennwerte ueberhaupt auseinander.
+    # Halogen AND carbonyl: V_S,min has to move to the carbonyl oxygen while
+    # the belt value stays on the bromine. Only here do the two numbers diverge
+    # at all.
     ("4-bromacetophenon", "CC(=O)c1ccc(Br)cc1"),
-    # Kein Halogen: laeuft die sigma-Loch-Analyse sauber ins Leere, und faellt
-    # die Orientierung ohne C-X-Achse vernuenftig auf die Hauptachsen zurueck?
+    # No halogen: does the sigma-hole analysis run into nothing cleanly, and
+    # does the orientation fall back sensibly onto the principal axes without a
+    # C-X axis?
     ("paracetamol", "CC(=O)Nc1ccc(O)cc1"),
 ]
 
 
 # ----------------------------------------------------------------------------
-# Geometrie
+# Geometry
 # ----------------------------------------------------------------------------
 
 def build_geometry(smiles, name, outdir, seed=0xF00D):
-    """SMILES -> 3D-Geometrie -> Molfile. Rueckgabe: (atomliste, molfile-pfad).
+    """SMILES -> 3D geometry -> molfile. Returns (atom list, molfile path).
 
-    Die Koordinaten stammen aus ETKDG plus MMFF94-Optimierung, also aus einem
-    Kraftfeld. Fuer einen Funktionstest der Pipeline reicht das; fuer Zahlen,
-    die neben quantenchemisch optimierten Geometrien stehen sollen, nicht.
+    The coordinates come from ETKDG plus MMFF94 optimisation, that is, from a
+    force field. That is enough for a functional test of the pipeline; not for
+    numbers meant to stand beside quantum-chemically optimised geometries.
     """
     from rdkit import Chem
     from rdkit.Chem import AllChem
 
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
-        raise SystemExit(f"SMILES nicht lesbar: {smiles!r}")
+        raise SystemExit(f"SMILES not readable: {smiles!r}")
     mol = Chem.AddHs(mol)
 
     params = AllChem.ETKDGv3()
-    params.randomSeed = seed                 # reproduzierbare Konformation
+    params.randomSeed = seed                 # reproducible conformation
     if AllChem.EmbedMolecule(mol, params) != 0:
-        raise SystemExit(f"{name}: 3D-Einbettung fehlgeschlagen.")
+        raise SystemExit(f"{name}: 3D embedding failed.")
 
     if AllChem.MMFFHasAllMoleculeParams(mol):
         AllChem.MMFFOptimizeMolecule(mol, maxIters=2000)
     else:
         AllChem.UFFOptimizeMolecule(mol, maxIters=2000)
-        print("    ! MMFF kennt nicht alle Atomtypen, UFF benutzt")
+        print("    ! MMFF does not know all atom types, using UFF")
 
     os.makedirs(outdir, exist_ok=True)
     molfile = os.path.join(outdir, f"{name}.mol")
@@ -110,14 +111,14 @@ def build_geometry(smiles, name, outdir, seed=0xF00D):
 
 
 # ----------------------------------------------------------------------------
-# Quantenchemie
+# Quantum chemistry
 # ----------------------------------------------------------------------------
 
 def run_scf(atoms, basis="def2-svp", method="hf", verbose=0):
-    """SCF-Rechnung. Rueckgabe: (Mole-Objekt, Dichtematrix).
+    """SCF calculation. Returns (Mole object, density matrix).
 
-    Uns interessiert nicht die Energie, sondern die Dichtematrix - daraus
-    werden anschliessend rho(r) und V(r) auf dem Gitter ausgewertet.
+    What we are after is not the energy but the density matrix - rho(r) and
+    V(r) are evaluated on the grid from it afterwards.
     """
     from pyscf import gto, scf, dft
 
@@ -132,22 +133,22 @@ def run_scf(atoms, basis="def2-svp", method="hf", verbose=0):
     mf.conv_tol = 1e-9
     energy = mf.kernel()
     if not mf.converged:
-        print("    ! SCF nicht konvergiert - Ergebnis mit Vorsicht behandeln")
+        print("    ! SCF did not converge - treat the result with caution")
     return mol, mf.make_rdm1(), energy
 
 
 # ----------------------------------------------------------------------------
-# Gitter
+# Grid
 # ----------------------------------------------------------------------------
 
 def make_grid(atoms, spacing_bohr=0.25, margin_ang=3.5):
-    """Regelmaessiges Gitter um das Molekuel, alles in Bohr.
+    """A regular grid around the molecule, everything in Bohr.
 
-    Der Rand muss die rho=0.001-Isoflaeche sicher einschliessen; die liegt
-    ungefaehr auf dem van-der-Waals-Radius, also gut 2 Angstrom jenseits der
-    aeussersten Kerne. 3.5 Angstrom Rand lassen genug Luft, ohne das Gitter
-    unnoetig aufzublaehen - jeder zusaetzliche Angstrom kostet quadratisch
-    Rechenzeit bei der Potentialauswertung.
+    The margin has to enclose the rho = 0.001 isosurface safely; that sits at
+    roughly the van der Waals radius, so a good 2 Angstrom beyond the outermost
+    nuclei. A margin of 3.5 Angstrom leaves enough room without inflating the
+    grid needlessly - every additional Angstrom costs quadratically in
+    computing time for the potential evaluation.
     """
     coords = np.array([[x, y, z] for (_, x, y, z) in atoms]) * BOHR_PER_ANGSTROM
     margin = margin_ang * BOHR_PER_ANGSTROM
@@ -159,27 +160,27 @@ def make_grid(atoms, spacing_bohr=0.25, margin_ang=3.5):
 
 
 def evaluate(mol, dm, lo, delta, npts, chunk=None, mem_mb=400, label=""):
-    """Wertet rho(r) und V(r) auf dem Gitter aus.
+    """Evaluates rho(r) and V(r) on the grid.
 
-    V(r) wird ueber ``int1e_grids`` blockweise berechnet - das ist die
-    PySCF-Routine, die genau fuer Potentialauswertungen an vielen Punkten
-    gedacht ist. Blockweise, weil die Zwischenmatrix sonst der Speicherfresser
-    waere: pro Gitterpunkt eine volle Basisfunktionsmatrix.
+    V(r) is computed block by block via ``int1e_grids`` - the PySCF routine
+    meant for exactly this, potential evaluation at many points. Block by
+    block, because otherwise the intermediate matrix would be the memory hog:
+    one full basis-function matrix per grid point.
     """
     from pyscf.dft import numint
 
-    # Blockgroesse aus dem Speicherbedarf ableiten, nicht raten.
-    # int1e_grids liefert ein Feld der Form (punkte, nao, nao) - bei 193
-    # Basisfunktionen sind das schon 0.28 MB PRO Gitterpunkt. Mit einem festen
-    # Block von 20000 Punkten wollte diese Funktion 6 GB anfordern und wurde
-    # vom Betriebssystem abgeschossen. Deshalb: Block so waehlen, dass die
-    # Zwischenmatrix unter mem_mb bleibt.
+    # Derive the block size from the memory need, do not guess it.
+    # int1e_grids returns an array of shape (points, nao, nao) - at 193 basis
+    # functions that is already 0.28 MB PER grid point. With a fixed block of
+    # 20000 points this function tried to allocate 6 GB and was killed by the
+    # operating system. Hence: choose the block so that the intermediate matrix
+    # stays below mem_mb.
     nao = mol.nao
     if chunk is None:
         chunk = max(64, int(mem_mb * 1024**2 / (nao * nao * 8)))
 
     ax = [lo[i] + np.arange(npts[i]) * delta for i in range(3)]
-    # Reihenfolge wie Turbomole: x laeuft am schnellsten, z am langsamsten
+    # Order as in Turbomole: x varies fastest, z slowest
     Z, Y, X = np.meshgrid(ax[2], ax[1], ax[0], indexing="ij")
     grid = np.stack([X.ravel(), Y.ravel(), Z.ravel()], axis=-1)
     total = grid.shape[0]
@@ -191,27 +192,27 @@ def evaluate(mol, dm, lo, delta, npts, chunk=None, mem_mb=400, label=""):
     nuclei = mol.atom_coords()                       # Bohr
 
     if label:
-        print(f"    {nao} Basisfunktionen -> Block von {chunk:,} Punkten "
-              f"({chunk * nao * nao * 8 / 1024**2:.0f} MB Zwischenmatrix)")
+        print(f"    {nao} basis functions -> block of {chunk:,} points "
+              f"({chunk * nao * nao * 8 / 1024**2:.0f} MB intermediate matrix)")
 
     t0 = time.time()
     for start in range(0, total, chunk):
         pts = grid[start:start + chunk]
 
-        # Elektronendichte
+        # electron density
         ao = numint.eval_ao(mol, pts)
         rho[start:start + chunk] = numint.eval_rho(mol, ao, dm)
 
-        # Elektrostatisches Potential: Kerne minus Elektronen
+        # electrostatic potential: nuclei minus electrons
         d = np.linalg.norm(pts[:, None, :] - nuclei[None, :, :], axis=2)
         d[d < 1e-12] = 1e-12
         v_nuc = (charges[None, :] / d).sum(axis=1)
 
-        # int1e_grids liefert <i|1/|r-C||j> mit POSITIVEM Vorzeichen; der
-        # elektronische Beitrag zum Potential muss also abgezogen werden.
-        # Kontrolle: weit ausserhalb eines neutralen Molekuels muss V gegen 0
-        # gehen. Bei HCl in 40 Bohr Abstand: v_nuc = +0.4516, v_ele = +0.4512,
-        # Differenz +0.0004 - Summe waere +0.9028 und damit offensichtlich falsch.
+        # int1e_grids returns <i|1/|r-C||j> with a POSITIVE sign, so the
+        # electronic contribution to the potential has to be subtracted.
+        # Check: far outside a neutral molecule V has to go to 0. For HCl at a
+        # distance of 40 Bohr: v_nuc = +0.4516, v_ele = +0.4512, difference
+        # +0.0004 - the sum would be +0.9028 and thus obviously wrong.
         ints = mol.intor("int1e_grids", grids=pts)
         v_ele = np.einsum("pij,ij->p", ints, dm)
 
@@ -222,25 +223,25 @@ def evaluate(mol, dm, lo, delta, npts, chunk=None, mem_mb=400, label=""):
             pct = 100.0 * done / total
             eta = (time.time() - t0) / done * (total - done)
             sys.stdout.write(f"\r    {label}: {pct:5.1f} %  "
-                             f"(noch ~{eta / 60:.1f} min)   ")
+                             f"(~{eta / 60:.1f} min left)   ")
             sys.stdout.flush()
     if label:
         sys.stdout.write(f"\r    {label}: 100.0 %  "
-                         f"({total:,} Punkte in {(time.time()-t0)/60:.1f} min)\n")
+                         f"({total:,} points in {(time.time()-t0)/60:.1f} min)\n")
 
     return rho, esp
 
 
 # ----------------------------------------------------------------------------
-# Turbomole-pointval-Format schreiben
+# Writing the Turbomole pointval format
 # ----------------------------------------------------------------------------
 
 def write_pointval(path, values, lo, delta, npts, quantity, title):
-    """Schreibt ein Gitter im Turbomole-``pointval``-Format.
+    """Writes a grid in the Turbomole ``pointval`` format.
 
-    Bewusst dasselbe Format wie die echten Daten, inklusive der vollen
-    Koordinaten pro Zeile und der Reihenfolge x-schnellst. Nur so durchlaeuft
-    der Testfall auch xyzToCube.py.
+    Deliberately the same format as the real data, including the full
+    coordinates per line and the x-fastest order. Only that way does the test
+    case pass through xyzToCube.py as well.
     """
     ax = [lo[i] + np.arange(npts[i]) * delta for i in range(3)]
     Z, Y, X = np.meshgrid(ax[2], ax[1], ax[0], indexing="ij")
@@ -276,7 +277,7 @@ def write_pointval(path, values, lo, delta, npts, quantity, title):
 
 
 # ----------------------------------------------------------------------------
-# Ein Molekuel komplett
+# One molecule, end to end
 # ----------------------------------------------------------------------------
 
 def make_case(name, smiles, root, spacing, margin, basis, method):
@@ -284,19 +285,19 @@ def make_case(name, smiles, root, spacing, margin, basis, method):
     outdir = os.path.join(root, name)
 
     atoms, molfile = build_geometry(smiles, name, outdir)
-    print(f"    Geometrie: {len(atoms)} Atome -> {os.path.basename(molfile)}")
+    print(f"    geometry: {len(atoms)} atoms -> {os.path.basename(molfile)}")
 
     t0 = time.time()
     mol, dm, energy = run_scf(atoms, basis=basis, method=method)
     print(f"    SCF ({method}/{basis}): E = {energy:.6f} Hartree, "
-          f"{mol.nao} Basisfunktionen, {time.time()-t0:.1f} s")
+          f"{mol.nao} basis functions, {time.time()-t0:.1f} s")
 
     lo, delta, npts = make_grid(atoms, spacing_bohr=spacing, margin_ang=margin)
     total = int(np.prod(npts))
-    print(f"    Gitter: {npts[0]} x {npts[1]} x {npts[2]} = {total:,} Punkte, "
+    print(f"    grid: {npts[0]} x {npts[1]} x {npts[2]} = {total:,} points, "
           f"delta = {delta} Bohr")
 
-    rho, esp = evaluate(mol, dm, lo, delta, npts, label="rho und V")
+    rho, esp = evaluate(mol, dm, lo, delta, npts, label="rho and V")
 
     td = os.path.join(outdir, "td.xyz")
     tp = os.path.join(outdir, "tp.xyz")
@@ -312,44 +313,44 @@ def make_case(name, smiles, root, spacing, margin, basis, method):
 
 def main(argv=None):
     p = argparse.ArgumentParser(
-        description="Testdatensaetze (td.xyz/tp.xyz) aus SMILES erzeugen.")
-    p.add_argument("--smiles", help="SMILES eines einzelnen Molekuels")
-    p.add_argument("--name", help="Ordner- und Dateiname dazu")
+        description="Produce test datasets (td.xyz/tp.xyz) from SMILES.")
+    p.add_argument("--smiles", help="SMILES of a single molecule")
+    p.add_argument("--name", help="folder and file name for it")
     p.add_argument("--preset", action="store_true",
-                   help="die beiden eingebauten Testfaelle erzeugen")
+                   help="produce the two built-in test cases")
     p.add_argument("--outdir", default="../sandbox",
-                   help="Wurzelverzeichnis fuer die Molekuelordner")
+                   help="root directory for the molecule folders")
     p.add_argument("--spacing", type=float, default=0.25,
-                   help="Gitterabstand in Bohr (Standard 0.25)")
+                   help="grid spacing in Bohr (default 0.25)")
     p.add_argument("--margin", type=float, default=3.5,
-                   help="Rand um das Molekuel in Angstrom (Standard 3.5)")
+                   help="margin around the molecule in Angstrom (default 3.5)")
     p.add_argument("--basis", default="def2-svp")
     p.add_argument("--method", default="hf", choices=["hf", "b3lyp"])
     args = p.parse_args(argv)
 
     print("=" * 70)
-    print("CreateTpTdFromSmiles.py - Testdaten fuer den ESP-Workflow")
+    print("CreateTpTdFromSmiles.py - test data for the ESP workflow")
     print("=" * 70)
-    print("Hinweis: Kraftfeld-Geometrie, eigenes Rechenniveau.")
-    print("Das sind Testfixtures - keine Referenzdaten fuer Vergleichstabellen.")
+    print("Note: force-field geometry, its own level of theory.")
+    print("These are test fixtures - not reference data for comparison tables.")
 
     cases = list(PRESETS) if args.preset else []
     if args.smiles:
         if not args.name:
-            raise SystemExit("--smiles braucht auch --name")
+            raise SystemExit("--smiles also needs --name")
         cases.append((args.name, args.smiles))
     if not cases:
-        raise SystemExit("Nichts zu tun: --preset oder --smiles/--name angeben.")
+        raise SystemExit("Nothing to do: pass --preset or --smiles/--name.")
 
     made = []
     for name, smiles in cases:
         made.append(make_case(name, smiles, args.outdir, args.spacing,
                               args.margin, args.basis, args.method))
 
-    print("\nFertig. Erzeugte Ordner:")
+    print("\nDone. Folders produced:")
     for m in made:
         print(f"  {m}")
-    print("\nWeiter mit:")
+    print("\nContinue with:")
     print("  cd ../scripts && python run_all.py --root ../sandbox --stride 1")
     return 0
 

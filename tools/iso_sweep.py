@@ -4,30 +4,30 @@
 iso_sweep.py
 ============
 
-Belegt die Wahl von ``--iso`` mit Messwerten statt mit einem Bauchgefuehl.
+Backs the choice of ``--iso`` with measurements instead of a gut feeling.
 
-Der Isowert ist der einzige Parameter des Workflows, der die *gemessenen* Zahlen
-verschiebt und nicht nur das Bild. Dieses Skript zeigt, wie stark: es wertet
-dieselben Cube-Dateien bei mehreren Isowerten aus und stellt sigma-Loch,
-Oberflaechenextrema und Guertel nebeneinander.
+The isovalue is the only parameter of the workflow that shifts the *measured*
+numbers and not just the picture. This script shows by how much: it evaluates
+the same cube files at several isovalues and puts the sigma hole, the surface
+extrema and the belt side by side.
 
-Ausgewertet wird mit denselben Funktionen, die auch ``render_esp.py`` benutzt
+The evaluation uses the same functions ``render_esp.py`` uses
 (``esp_statistics``, ``shell_points``, ``local_extrema``,
-``sigma_hole_interpolated``). Dadurch stehen in der Tabelle exakt die Zahlen,
-die der Workflow selbst ausgeben wuerde; es gibt keine zweite, abweichende
-Implementierung, die spaeter auseinanderlaufen koennte.
+``sigma_hole_interpolated``). The table therefore holds exactly the numbers the
+workflow itself would report; there is no second, diverging implementation that
+could drift apart later.
 
-Aufruf::
+Call::
 
     cd tools
     python iso_sweep.py --folder ../sandbox/brombenzol
 
-Ergebnis: Tabelle auf der Konsole und ``iso_sweep_<ordner>.csv`` daneben.
-Die Tabelle in Abschnitt 4.1 der Hintergrunddokumentation stammt aus diesem
-Skript.
+Result: a table on the console and ``iso_sweep_<folder>.csv`` next to the cube
+files. The table in section 4.1 of the background document comes from this
+script.
 
-Gebraucht werden nur numpy und die Skripte in ../scripts - kein PyMOL: das wird
-in render_esp.py erst in ensure_pymol() importiert.
+Only numpy and the scripts in ../scripts are needed - no PyMOL: render_esp.py
+imports that only inside ensure_pymol().
 """
 
 from __future__ import annotations
@@ -47,11 +47,11 @@ from constants import HARTREE_TO_KCAL                           # noqa: E402
 
 
 def measure(dens, esp, atoms, origin, voxel, iso):
-    """Kennwerte fuer einen Isowert.
+    """The statistics for one isovalue.
 
-    Alles Grosse bleibt lokal und wird am Ende freigegeben: bei 251^3 haengen an
-    jedem Durchlauf mehrere hundert MB, die sonst bis zum Schleifenende liegen
-    bleiben und den Prozess auf einer 3-GB-Maschine kippen.
+    Everything large stays local and is released at the end: at 251^3 several
+    hundred MB hang on every pass, which would otherwise sit around until the
+    end of the loop and topple the process on a 3 GB machine.
     """
     vmin, vmax, npts = esp_statistics(dens, esp, iso=iso)
     pos, vals = R.shell_points(dens, esp, origin, voxel, iso=iso)
@@ -87,33 +87,33 @@ def measure(dens, esp, atoms, origin, voxel, iso):
 def main(argv=None):
     here = os.path.dirname(os.path.abspath(__file__))
     p = argparse.ArgumentParser(
-        description="Isowert gegen die gemessenen Kennwerte auftragen.")
+        description="Plot the isovalue against the measured statistics.")
     p.add_argument("--folder", default=os.path.join(here, "..", "sandbox",
                                                     "brombenzol"),
-                   help="Molekuelordner mit td.cube und tp.cube "
-                        "(Standard: ../sandbox/brombenzol)")
+                   help="molecule folder with td.cube and tp.cube "
+                        "(default: ../sandbox/brombenzol)")
     p.add_argument("--isos", type=float, nargs="+",
                    default=[0.0005, 0.0008, 0.0010, 0.0015, 0.0020, 0.0040],
-                   help="zu testende Isowerte in a.u. "
-                        "(Standard: 0.0005 0.0008 0.001 0.0015 0.002 0.004)")
+                   help="isovalues to test, in a.u. "
+                        "(default: 0.0005 0.0008 0.001 0.0015 0.002 0.004)")
     p.add_argument("--out", default=None,
-                   help="CSV-Ausgabe (Standard: iso_sweep_<ordner>.csv "
-                        "neben den Cube-Dateien)")
+                   help="CSV output (default: iso_sweep_<folder>.csv next to "
+                        "the cube files)")
     args = p.parse_args(argv)
 
     folder = os.path.abspath(args.folder)
     name = os.path.basename(os.path.normpath(folder))
     out = args.out or os.path.join(folder, f"iso_sweep_{name}.csv")
 
-    print(f"lese {os.path.join(folder, 'td.cube')} ...", flush=True)
+    print(f"reading {os.path.join(folder, 'td.cube')} ...", flush=True)
     dens, atoms, origin, voxel = R.read_cube(os.path.join(folder, "td.cube"))
     gc.collect()
-    print(f"lese {os.path.join(folder, 'tp.cube')} ...", flush=True)
+    print(f"reading {os.path.join(folder, 'tp.cube')} ...", flush=True)
     esp, _, _, _ = R.read_cube(os.path.join(folder, "tp.cube"))
     gc.collect()
     if dens.shape != esp.shape:
-        raise SystemExit("Dichte- und ESP-Cube haben unterschiedliche Gitter.")
-    print(f"Gitter {'x'.join(map(str, dens.shape))}, {len(atoms)} Atome\n",
+        raise SystemExit("Density and ESP cube are on different grids.")
+    print(f"grid {'x'.join(map(str, dens.shape))}, {len(atoms)} atoms\n",
           flush=True)
 
     rows = [measure(dens, esp, atoms, origin, voxel, iso) for iso in args.isos]

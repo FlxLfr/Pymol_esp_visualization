@@ -1,3 +1,3 @@
 molecule,structure,grid,iso_au,shell_points,VS_min_au,VS_max_au,VS_min_kcal,VS_max_kcal,VS_min_kJ,VS_max_kJ,VS_max_on,VS_min_on,halogen,sigma_hole_on,sigma_hole_au,sigma_hole_kcal,sigma_method,belt_min_au,belt_min_kcal,n_halogens,sigma_holes_all,esp_range_used_au,esp_range_mode,colormap
-brombenzol,brombenzol_aro_opti.mol,32x37x24,0.001,313,-0.01863,0.03070,-11.69,19.26,-48.9,80.6,H9,Br12,Br,Br12,0.01528,9.59,interpoliert,-0.01863,-11.69,1,Br12:0.01528,0.0350,auto,redblue
+brombenzol,brombenzol_aro_opti.mol,32x37x24,0.001,313,-0.01863,0.03070,-11.69,19.26,-48.9,80.6,H9,Br12,Br,Br12,0.01528,9.59,interpolated,-0.01863,-11.69,1,Br12:0.01528,0.0350,auto,redblue
 # common colour scale covering all molecules: +/- 0.0350 a.u.

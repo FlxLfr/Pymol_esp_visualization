@@ -4,13 +4,13 @@
 xyzToCube.py
 ============
 
-Konvertiert Turbomole-``pointval``-Gitterdateien (td.xyz, tp.xyz, ...) in das
-Gaussian-Cube-Format, damit sie in PyMOL, VMD, ChimeraX, Avogadro oder Multiwfn
-geladen werden koennen.
+Converts Turbomole ``pointval`` grid files (td.xyz, tp.xyz, ...) into the
+Gaussian cube format, so that they can be loaded into PyMOL, VMD, ChimeraX,
+Avogadro or Multiwfn.
 
-Hintergrund
------------
-Turbomole schreibt Volumendaten als reine ASCII-Punktwolke::
+Background
+----------
+Turbomole writes volumetric data as a plain ASCII point cloud::
 
     #origin           0.000000      0.000000      0.000000
     #vector1          1.000000      0.000000      0.000000
@@ -26,38 +26,38 @@ Turbomole schreibt Volumendaten als reine ASCII-Punktwolke::
           -15.00000000   -15.00000000   -15.00000000   -0.00054019
           ...
 
-Jede Zeile enthaelt die vollen Koordinaten -> bei 251^3 Punkten sind das 1.25 GB.
-Eine Cube-Datei speichert dieselbe Information mit implizitem Gitter (~200 MB).
+Every line carries the full coordinates -> at 251^3 points that is 1.25 GB. A
+cube file stores the same information with an implicit grid (~200 MB).
 
-Zwei Stolpersteine, die dieses Skript abfaengt:
+Two pitfalls that this script catches:
 
-1. **Achsenreihenfolge.** In der Turbomole-Datei laeuft *x* am schnellsten,
-   im Cube-Format laeuft *z* am schnellsten. Ohne Umsortierung erhaelt man ein
-   transponiertes, gespiegeltes Molekuel.
-2. **Einheiten.** Das Gitter steht in Bohr (atomare Einheiten), die
-   Strukturdatei ueblicherweise in Angstrom. Das Skript rechnet die Atome
-   standardmaessig um (``--struct-unit angstrom``).
+1. **Axis order.** In the Turbomole file *x* varies fastest, in the cube format
+   *z* varies fastest. Without reordering you get a transposed, mirrored
+   molecule.
+2. **Units.** The grid is in Bohr (atomic units), the structure file usually in
+   Angstrom. By default the script converts the atoms
+   (``--struct-unit angstrom``).
 
-Benutzung
----------
-Typischer Aufruf fuer das Brombenzol-Beispiel::
+Usage
+-----
+Typical call for the bromobenzene example::
 
     python xyzToCube.py --struct brombenzol_aro_opti.mol td.xyz tp.xyz --pymol
 
-Ergebnis: ``td.cube``, ``tp.cube`` und ``esp.pml`` (fertiges PyMOL-Skript durch --pymol getriggert).
+Result: ``td.cube``, ``tp.cube`` and ``esp.pml`` (a ready-to-run PyMOL script,
+triggered by --pymol).
 
-Wenn PyMOL mit dem vollen 251^3-Gitter zu langsam wird, jeden zweiten Punkt
-verwenden::
+If PyMOL gets too slow with the full 251^3 grid, use every second point::
 
     python xyzToCube.py --struct brombenzol_aro_opti.mol td.xyz tp.xyz --stride 2
 
-Als Strukturdatei werden ``.xyz``, ``.mol`` und ``.sdf`` akzeptiert -
-dieselben Formate wie in render_esp.py. Empfehlung: beiden Skripten *dieselbe*
-Datei geben. Sonst stammen die Atome im Cube-Header aus der einen und die
-Staebchen in PyMOL aus der anderen Quelle, und eine Abweichung zwischen beiden
-faellt nicht auf, weil keine Fehlermeldung kommt.
+``.xyz``, ``.mol`` and ``.sdf`` are accepted as structure files - the same
+formats as in render_esp.py. Recommendation: give both scripts the *same*
+file. Otherwise the atoms in the cube header come from one source and the
+sticks in PyMOL from another, and a discrepancy between the two goes unnoticed
+because no error is raised.
 
-Nur numpy wird benoetigt (``pip install numpy``).
+Only numpy is required (``pip install numpy``).
 """
 
 from __future__ import annotations
@@ -72,16 +72,16 @@ import time
 import numpy as np
 
 # ----------------------------------------------------------------------------
-# Konstanten
+# Constants
 # ----------------------------------------------------------------------------
 
 from constants import (BOHR_PER_ANGSTROM, ANGSTROM_PER_BOHR,  # noqa: F401
                        HARTREE_TO_KJ)
 
-# Elementsymbole in der Reihenfolge der Ordnungszahl: die Position in der Liste
-# IST Z-1, daraus wird unten SYMBOL_TO_Z gebaut. Vollstaendiges Periodensystem
-# bis Oganesson (Z = 118); die Liste vorher endete bei Radon, was einen
-# vermeidbaren Fehlerfall fuer Actinoide erzeugt haette.
+# Element symbols in order of atomic number: the position in the list IS Z-1,
+# and SYMBOL_TO_Z is built from it below. The complete periodic table up to
+# oganesson (Z = 118); the list used to end at radon, which would have created
+# an avoidable failure case for the actinides.
 ELEMENTS = [
     "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
     "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca",
@@ -98,37 +98,36 @@ ELEMENTS = [
 ]
 SYMBOL_TO_Z = {sym.upper(): i + 1 for i, sym in enumerate(ELEMENTS)}
 
-CHUNK_BYTES = 1 << 24                      # 16 MB Lesepuffer
+CHUNK_BYTES = 1 << 24                      # 16 MB read buffer
 
 
 # ----------------------------------------------------------------------------
-# Strukturdatei einlesen
+# Reading the structure file
 # ----------------------------------------------------------------------------
 
 def _symbol_to_z(sym: str, path: str) -> int:
-    """Elementsymbol (oder Ordnungszahl) -> Ordnungszahl."""
+    """Element symbol (or atomic number) -> atomic number."""
     key = sym.strip().capitalize().upper()
     if key in SYMBOL_TO_Z:
         return SYMBOL_TO_Z[key]
     if re.fullmatch(r"\d+", sym.strip()):
-        return int(sym)                                # Ordnungszahl statt Symbol
+        return int(sym)                                # atomic number, not a symbol
     raise ValueError(
-        f"Unbekanntes Element '{sym}' in {path}. "
-        f"Bitte die Liste ELEMENTS im Skript ergaenzen."
+        f"Unknown element '{sym}' in {path}. "
+        f"Please extend the ELEMENTS list in the script."
     )
 
 
 def _read_xyz(lines, path):
-    """xyz-Format: Zeilen ``Symbol x y z``.
+    """xyz format: lines of ``symbol x y z``.
 
-    Akzeptiert sowohl das Standardformat (Atomanzahl + Kommentarzeile + Atome)
-    als auch eine nackte Koordinatenliste, wie Turbomole-Workflows sie haeufig
-    produzieren.
+    Accepts both the standard format (atom count + comment line + atoms) and a
+    bare coordinate list, which Turbomole workflows often produce.
     """
     start = 0
     first = lines[0].strip() if lines else ""
     if re.fullmatch(r"\d+", first):
-        start = 2                                     # Anzahl + Kommentar ueberspringen
+        start = 2                                     # skip count + comment
 
     atoms = []
     for line in lines[start:]:
@@ -138,25 +137,25 @@ def _read_xyz(lines, path):
         try:
             x, y, z = (float(parts[1]), float(parts[2]), float(parts[3]))
         except ValueError:
-            continue                                   # Kommentar-/Muellzeile
+            continue                                   # comment or junk line
         atoms.append((_symbol_to_z(parts[0], path), x, y, z))
     return atoms
 
 
 def _read_molfile(lines, path):
-    """MDL-Molfile / SD-File (.mol, .sdf), V2000 und V3000.
+    """MDL molfile / SD file (.mol, .sdf), V2000 and V3000.
 
-    Aufbau V2000::
+    Layout of V2000::
 
-        Zeile 1   Titel
-        Zeile 2   Programmzeile
-        Zeile 3   Kommentar
-        Zeile 4   Zaehlzeile:  " 12 12  0 ... V2000"
-        dann      je Atom:  x  y  z  Symbol  ...      <- Koordinaten ZUERST
-        dann      Bindungsblock
+        line 1    title
+        line 2    program line
+        line 3    comment
+        line 4    counts line:  " 12 12  0 ... V2000"
+        then      per atom:  x  y  z  symbol  ...     <- coordinates FIRST
+        then      bond block
 
-    Bei SD-Files wird nur der erste Datensatz gelesen (bis ``$$$$``).
-    Molfile-Koordinaten sind per Definition in Angstrom.
+    For SD files only the first record is read (up to ``$$$$``).
+    Molfile coordinates are in Angstrom by definition.
     """
     atoms = []
 
@@ -181,19 +180,19 @@ def _read_molfile(lines, path):
 
     # --- V2000 ---------------------------------------------------------
     if len(lines) < 5:
-        raise ValueError(f"{path}: zu kurz fuer ein Molfile.")
+        raise ValueError(f"{path}: too short for a molfile.")
 
     counts = lines[3]
     try:
         natoms = int(counts[0:3])
     except ValueError:
         raise ValueError(
-            f"{path}: Zaehlzeile (Zeile 4) nicht lesbar: {counts.strip()!r}")
+            f"{path}: counts line (line 4) not readable: {counts.strip()!r}")
 
     for line in lines[4:4 + natoms]:
         parts = line.split()
         if len(parts) < 4:
-            raise ValueError(f"{path}: Atomzeile unvollstaendig: {line.strip()!r}")
+            raise ValueError(f"{path}: atom line incomplete: {line.strip()!r}")
         x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
         atoms.append((_symbol_to_z(parts[3], path), x, y, z))
 
@@ -201,31 +200,31 @@ def _read_molfile(lines, path):
 
 
 def read_structure(path: str, unit: str = "angstrom"):
-    """Liest eine Strukturdatei und liefert die Atome in **Bohr**.
+    """Reads a structure file and returns the atoms in **Bohr**.
 
-    Unterstuetzt:
+    Supported:
 
     ==========  =====================================================
-    ``.xyz``    ``Symbol x y z``, mit oder ohne Kopfzeilen
-    ``.mol``    MDL-Molfile V2000/V3000 (Koordinaten *vor* dem Symbol)
-    ``.sdf``    SD-File, erster Datensatz
+    ``.xyz``    ``symbol x y z``, with or without header lines
+    ``.mol``    MDL molfile V2000/V3000 (coordinates *before* the symbol)
+    ``.sdf``    SD file, first record
     ==========  =====================================================
 
-    Rueckgabe: Liste von ``(Z, x, y, z)``.
+    Returns a list of ``(Z, x, y, z)``.
 
-    ``unit`` gilt nur fuer xyz-Dateien - Molfile-Koordinaten sind per
-    Definition in Angstrom, dort wird die Angabe ignoriert.
+    ``unit`` applies to xyz files only - molfile coordinates are in Angstrom by
+    definition, and the setting is ignored there.
     """
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         lines = fh.read().splitlines()
 
     if not lines:
-        raise ValueError(f"{path} ist leer.")
+        raise ValueError(f"{path} is empty.")
 
     ext = os.path.splitext(path)[1].lower()
 
     if ext in (".mol", ".sdf", ".sd"):
-        # SD-File: nur der erste Datensatz
+        # SD file: the first record only
         for i, ln in enumerate(lines):
             if ln.startswith("$$$$"):
                 lines = lines[:i]
@@ -237,32 +236,32 @@ def read_structure(path: str, unit: str = "angstrom"):
         file_unit = unit
 
     if not atoms:
-        raise ValueError(f"Keine Atome in {path} gefunden.")
+        raise ValueError(f"No atoms found in {path}.")
 
     if file_unit == "angstrom":
         atoms = [(z, x * BOHR_PER_ANGSTROM,
                      y * BOHR_PER_ANGSTROM,
                      zz * BOHR_PER_ANGSTROM) for (z, x, y, zz) in atoms]
     elif file_unit != "bohr":
-        raise ValueError("unit muss 'angstrom' oder 'bohr' sein")
+        raise ValueError("unit must be 'angstrom' or 'bohr'")
 
     return atoms
 
 
 # ----------------------------------------------------------------------------
-# Turbomole-Gitterdatei einlesen
+# Reading the Turbomole grid file
 # ----------------------------------------------------------------------------
 
 def parse_header(fh):
-    """Liest den ``#``-Kopf einer pointval-Datei.
+    """Reads the ``#`` header of a pointval file.
 
-    Rueckgabe: (info-dict, erste_datenzeile). Die erste Datenzeile wurde bereits
-    aus dem Stream gelesen und muss vom Aufrufer mitverarbeitet werden.
+    Returns (info dict, first data line). The first data line has already been
+    read from the stream and has to be processed by the caller.
     """
     info = {
         "origin": np.zeros(3),
         "vectors": np.eye(3),
-        "grid": [None, None, None],       # je (start, delta, points)
+        "grid": [None, None, None],       # each (start, delta, points)
         "title": "",
         "quantity": "",
     }
@@ -271,7 +270,7 @@ def parse_header(fh):
     while True:
         line = fh.readline()
         if not line:
-            raise ValueError("Datei endet im Header - keine Daten gefunden.")
+            raise ValueError("File ends inside the header - no data found.")
         if not line.startswith("#"):
             first_data_line = line
             break
@@ -289,7 +288,7 @@ def parse_header(fh):
             m = re.search(
                 r"start\s+(\S+)\s+delta\s+(\S+)\s+points\s+(\d+)", body, re.I)
             if not m:
-                raise ValueError(f"Gitterzeile nicht lesbar: {line!r}")
+                raise ValueError(f"Grid line not readable: {line!r}")
             info["grid"][idx] = (float(m.group(1)),
                                  float(m.group(2)),
                                  int(m.group(3)))
@@ -301,16 +300,16 @@ def parse_header(fh):
                 info["quantity"] = body
 
     if any(g is None for g in info["grid"]):
-        raise ValueError("Header unvollstaendig: #grid1/#grid2/#grid3 fehlen.")
+        raise ValueError("Header incomplete: #grid1/#grid2/#grid3 are missing.")
 
     return info, first_data_line
 
 
 def read_values(path, verbose=True):
-    """Liest die 4. Spalte einer pointval-Datei als float32-Array.
+    """Reads the 4th column of a pointval file as a float32 array.
 
-    Liest in grossen Bloecken statt Zeile fuer Zeile - fuer die 1.25-GB-Dateien
-    ist das etwa eine Groessenordnung schneller.
+    Reads in large blocks instead of line by line - for the 1.25 GB files that
+    is about an order of magnitude faster.
     """
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         info, first_line = parse_header(fh)
@@ -342,14 +341,14 @@ def read_values(path, verbose=True):
                 continue
             if len(tokens) % 4 != 0:
                 raise ValueError(
-                    f"{path}: erwartete 4 Spalten pro Zeile, "
-                    f"gefunden {len(tokens)} Werte in einem Block."
+                    f"{path}: expected 4 columns per line, "
+                    f"found {len(tokens)} values in one block."
                 )
             arr = np.asarray(tokens, dtype=np.float32).reshape(-1, 4)[:, 3]
             n = arr.size
             if filled + n > total:
                 raise ValueError(
-                    f"{path}: mehr Datenpunkte als der Header angibt "
+                    f"{path}: more data points than the header states "
                     f"({filled + n} > {total})."
                 )
             values[filled:filled + n] = arr
@@ -357,50 +356,50 @@ def read_values(path, verbose=True):
 
             if verbose:
                 pct = 100.0 * filled / total
-                sys.stdout.write(f"\r    lese {os.path.basename(path)}: "
+                sys.stdout.write(f"\r    reading {os.path.basename(path)}: "
                                  f"{pct:5.1f} %")
                 sys.stdout.flush()
 
-        # letzte, unvollstaendig gepufferte Zeile
+        # the last, incompletely buffered line
         tokens = remainder.split()
         if tokens:
             if len(tokens) % 4 != 0:
-                raise ValueError(f"{path}: letzte Zeile unvollstaendig.")
+                raise ValueError(f"{path}: last line incomplete.")
             arr = np.asarray(tokens, dtype=np.float32).reshape(-1, 4)[:, 3]
             values[filled:filled + arr.size] = arr
             filled += arr.size
 
     if verbose:
-        sys.stdout.write(f"\r    lese {os.path.basename(path)}: 100.0 %  "
-                         f"({filled:,} Punkte in {time.time() - t0:.1f} s)\n")
+        sys.stdout.write(f"\r    reading {os.path.basename(path)}: 100.0 %  "
+                         f"({filled:,} points in {time.time() - t0:.1f} s)\n")
 
     if filled != total:
         raise ValueError(
-            f"{path}: {filled} Werte gelesen, laut Header erwartet {total}."
+            f"{path}: read {filled} values, header states {total}."
         )
 
-    # Turbomole: x laeuft am schnellsten -> Speicherlayout ist [i3, i2, i1]
+    # Turbomole: x varies fastest -> the memory layout is [i3, i2, i1]
     data = values.reshape(n3, n2, n1)
-    # Cube: z laeuft am schnellsten -> wir wollen [i1, i2, i3]
+    # Cube: z varies fastest -> we want [i1, i2, i3]
     data = np.ascontiguousarray(np.transpose(data, (2, 1, 0)))
 
     return info, data
 
 
 # ----------------------------------------------------------------------------
-# Cube schreiben
+# Writing the cube
 # ----------------------------------------------------------------------------
 
 def write_cube(path, info, data, atoms, stride=1, comment=""):
-    """Schreibt ein Gaussian-Cube. Alle Laengen in Bohr.
+    """Writes a Gaussian cube. All lengths in Bohr.
 
-    Geschrieben wird erst nach <name>.part und am Ende umbenannt. Ein voller
-    Cube ist 200 MB und braucht Minuten; wird der Lauf in dieser Zeit
-    abgebrochen - Strg-C, geschlossenes Fenster, volle Platte -, bliebe sonst
-    eine halbe Datei mit gueltigem Kopf liegen. Der naechste Lauf haelt die fuer
-    fertig, ueberspringt die Konvertierung und rendert eine Isoflaeche mit
-    fehlender hinterer Haelfte. Das Umbenennen ist der Moment, in dem die Datei
-    entsteht - vorher gibt es sie unter ihrem Namen nicht.
+    It is written to <name>.part first and renamed at the end. A full cube is
+    200 MB and takes minutes; if the run is aborted in that time - Ctrl-C, a
+    closed window, a full disk - half a file with a valid header would
+    otherwise be left behind. The next run takes that for finished, skips the
+    conversion and renders an isosurface with its rear half missing. The
+    rename is the moment the file comes into being - before that it does not
+    exist under its name.
     """
     if stride > 1:
         data = data[::stride, ::stride, ::stride]
@@ -412,12 +411,12 @@ def write_cube(path, info, data, atoms, stride=1, comment=""):
 
     # Ursprung des ersten Voxels im kartesischen Raum
     origin = info["origin"] + sum(starts[i] * vecs[i] for i in range(3))
-    # Voxelvektoren (mit Stride skaliert)
+    # voxel vectors (scaled by the stride)
     voxel = np.array([deltas[i] * stride * vecs[i] for i in range(3)])
 
     tmp = path + ".part"
     with open(tmp, "w", encoding="utf-8") as fh:
-        fh.write(f"{comment or 'Cube erzeugt mit xyzToCube.py'}\n")
+        fh.write(f"{comment or 'cube written by xyzToCube.py'}\n")
         fh.write(f"{info.get('quantity', '') or 'volumetric data'} | "
                  f"{info.get('title', '')} | Einheiten: Bohr\n")
         fh.write(f"{len(atoms):5d} {origin[0]:12.6f} {origin[1]:12.6f} "
@@ -429,9 +428,9 @@ def write_cube(path, info, data, atoms, stride=1, comment=""):
             fh.write(f"{znum:5d} {float(znum):12.6f} {x:12.6f} {y:12.6f} "
                      f"{z:12.6f}\n")
 
-        # Werte: z am schnellsten, 6 pro Zeile.
-        # Ein vorkompiliertes Formatmuster pro z-Reihe ist deutlich schneller
-        # als eine Schleife ueber alle 15.8 Mio. Einzelwerte.
+        # Values: z fastest, 6 per line.
+        # A precompiled format pattern per z row is considerably faster than a
+        # loop over all 15.8 million individual values.
         nz = n[2]
         n_full, rest = divmod(nz, 6)
         row_fmt = ("%13.5E" * 6 + "\n") * n_full
@@ -448,51 +447,52 @@ def write_cube(path, info, data, atoms, stride=1, comment=""):
         if buf:
             fh.write("".join(buf))
 
-    # Erst hier existiert <name>.cube. os.replace ersetzt auch eine vorhandene
-    # Datei und ist auf einem Dateisystem unteilbar - es gibt keinen Moment, in
-    # dem der alte Cube weg und der neue noch nicht da ist.
+    # Only here does <name>.cube exist. os.replace also replaces an existing
+    # file and is atomic within one file system - there is no moment in which
+    # the old cube is gone and the new one is not yet there.
     os.replace(tmp, path)
     return n, origin, voxel
 
 
 # ----------------------------------------------------------------------------
-# Schalenauswertung (rho = iso) und Farbskala
+# Shell evaluation (rho = iso) and colour scale
 #
-# Gemeinsame Quelle fuer beide Skripte: render_esp.py importiert shell_mask(),
-# esp_statistics() und nice_range() von hier, statt sie ein zweites Mal zu
-# definieren. Vorher stand die Maskenlogik dreimal im Repo (hier in
-# auto_esp_range, in render_esp.esp_statistics und in render_esp.shell_points).
-# Eine geaenderte Schalendicke haette an allen drei Stellen nachgezogen werden
-# muessen - sonst waeren die Zahlen in der Statistik und die Farbskala im Bild
-# stillschweigend auseinandergelaufen.
+# The single source for both scripts: render_esp.py imports shell_mask(),
+# esp_statistics() and nice_range() from here instead of defining them a second
+# time. The mask logic used to sit in the repository three times (here in
+# auto_esp_range, in render_esp.esp_statistics and in render_esp.shell_points).
+# A changed shell thickness would have had to be followed through in all three
+# places - otherwise the numbers in the statistics and the colour scale in the
+# picture would have drifted apart silently.
 # ----------------------------------------------------------------------------
 
-# Schalendicke relativ zum Isowert. 0.12 haelt die Schale duenn genug, dass die
-# Werte wirklich von der Isoflaeche stammen; ist sie dadurch zu schwach besetzt
-# (grobes Gitter, kleines Molekuel), weitet SHELL_TOL_FALLBACK einmalig auf.
+# Shell thickness relative to the isovalue. 0.12 keeps the shell thin enough
+# that the values really come from the isosurface; if that leaves it too
+# sparsely populated (coarse grid, small molecule), SHELL_TOL_FALLBACK widens it
+# once.
 SHELL_TOL_FACTOR = 0.12
 SHELL_TOL_FALLBACK = 0.30
 SHELL_MIN_POINTS = 50
 
 
 def shell_mask(density, iso=0.001, tol_factor=SHELL_TOL_FACTOR):
-    """Boolesche Maske der Gitterpunkte auf der rho=iso-Schale.
+    """Boolean mask of the grid points on the rho = iso shell.
 
-    Zurueckgegeben wird nur die Maske, nicht die Werte - so koennen Aufrufer
-    dieselbe Auswahl auf ESP-Werte, Gitterindizes oder Koordinaten anwenden,
-    ohne das (bei 251^3 mehrere hundert MB grosse) Gitter zu kopieren.
+    Only the mask is returned, not the values - that way callers can apply the
+    same selection to ESP values, grid indices or coordinates without copying
+    the grid, which at 251^3 is several hundred MB.
     """
     mask = np.abs(density - iso) < iso * tol_factor
-    if mask.sum() < SHELL_MIN_POINTS:         # Schale zu duenn -> aufweiten
+    if mask.sum() < SHELL_MIN_POINTS:         # shell too thin -> widen it
         mask = np.abs(density - iso) < iso * SHELL_TOL_FALLBACK
     return mask
 
 
 def esp_statistics(density, esp, iso=0.001, tol_factor=SHELL_TOL_FACTOR):
-    """ESP-Kennzahlen auf der rho=iso-Schale.
+    """ESP statistics on the rho = iso shell.
 
-    Liefert (V_min, V_max, anzahl_punkte) in atomaren Einheiten.
-    ``tol_factor`` legt die Schalendicke relativ zum Isowert fest.
+    Returns (V_min, V_max, number_of_points) in atomic units.
+    ``tol_factor`` sets the shell thickness relative to the isovalue.
     """
     mask = shell_mask(density, iso, tol_factor)
     if not mask.any():
@@ -502,23 +502,23 @@ def esp_statistics(density, esp, iso=0.001, tol_factor=SHELL_TOL_FACTOR):
 
 
 def nice_range(vmin, vmax, step=0.005):
-    """Symmetrischer, auf ``step`` aufgerundeter Bereich."""
+    """A symmetric range, rounded up to a multiple of ``step``."""
     amp = max(abs(vmin), abs(vmax))
     return math.ceil(amp / step) * step
 
 
 def auto_esp_range(density, esp, iso=0.001, tol_factor=SHELL_TOL_FACTOR,
                    step=0.005):
-    """Symmetrische Farbskala aus den ESP-Werten auf der rho=iso-Schale.
+    """A symmetric colour scale from the ESP values on the rho = iso shell.
 
-    Den Bereich NICHT aus dem ganzen Gitter nehmen (dort dominieren die
-    Kernsingularitaeten mit mehreren hundert a.u.), sondern nur aus den Punkten
-    auf der Isoflaeche, und das Ergebnis symmetrisch auf ein glattes Vielfaches
-    von ``step`` aufrunden. Genau die Kombination, die render_esp.py fuer
-    ``--esp-range auto`` benutzt - dort aus denselben zwei Funktionen.
+    Do NOT take the range from the whole grid (there the nuclear singularities
+    dominate with several hundred a.u.), take it only from the points on the
+    isosurface, and round the result up symmetrically to a round multiple of
+    ``step``. Exactly the combination render_esp.py uses for
+    ``--esp-range auto`` - from the same two functions over there.
 
-    Rueckgabe: halbe Breite in a.u., oder None wenn keine Schale gefunden wird
-    (dann fehlt die Dichtedatei, oder der Isowert passt nicht zu den Daten).
+    Returns the half width in a.u., or None if no shell is found (then the
+    density file is missing, or the isovalue does not match the data).
     """
     if density is None or esp is None or density.shape != esp.shape:
         return None
@@ -529,48 +529,49 @@ def auto_esp_range(density, esp, iso=0.001, tol_factor=SHELL_TOL_FACTOR,
 
 
 # ----------------------------------------------------------------------------
-# PyMOL-Skript erzeugen
+# Generating the PyMOL script
 # ----------------------------------------------------------------------------
 
 PML_TEMPLATE = """# --------------------------------------------------------------
-# esp.pml - ESP auf Elektronendichte-Isoflaeche
-# Start:  pymol esp.pml       (oder in PyMOL:  @esp.pml)
+# esp.pml - ESP on the electron density isosurface
+# Start:  pymol esp.pml       (or inside PyMOL:  @esp.pml)
 # --------------------------------------------------------------
 
 reinitialize
 
-# 1) Struktur und Volumendaten laden
+# 1) load the structure and the volumetric data
 load {struct}, mol
 {load_density}
 load {esp_cube}, esp
 
-# 2) Molekuel als Staebchen
+# 2) the molecule as sticks
 hide everything
 show sticks, mol
 set stick_radius, 0.3
 color grey70, mol and elem C
 util.cnc mol
 
-# 3) Isoflaeche der Elektronendichte bei rho = {iso} a.u.
-#    (Politzer/Murray-Konvention fuer die "Molekueloberflaeche")
+# 3) isosurface of the electron density at rho = {iso} a.u.
+#    (the Politzer/Murray convention for the "molecular surface")
 {isosurface}
 
-# 4) Farbrampe fuer das ESP; Werte in Hartree/e (a.u.)
-#    {vmin} .. {vmax} a.u.  entspricht {kvmin:.0f} .. {kvmax:.0f} kJ/(mol*e)
+# 4) colour ramp for the ESP; values in Hartree/e (a.u.)
+#    {vmin} .. {vmax} a.u.  equals {kvmin:.0f} .. {kvmax:.0f} kJ/(mol*e)
 ramp_new espramp, esp, [{ramp_levels}], [{ramp_colors}]
 
-# 5) ESP auf die Oberflaeche mappen
+# 5) map the ESP onto the surface
 set surface_color, espramp, {surface_target}
 set surface_quality, 1
 
-#    Transparenz: 0 = opak (kraftigste Farben, Staebchen unsichtbar),
-#    0.15 = Standard (Molekuelgeruest scheint durch),
-#    ab ca. 0.3 wird es unleserlich, weil man durch das ganze Molekuel schaut.
+#    transparency: 0 = opaque (strongest colours, sticks invisible),
+#    0.15 = the default (the skeleton shows through),
+#    from about 0.3 on it becomes unreadable, because you look through the
+#    whole molecule.
 set transparency, {transparency}
 set transparency_mode, 2
 set two_sided_lighting, on
 
-# 6) Darstellung / Rendering
+# 6) appearance / rendering
 bg_color white
 set ray_opaque_background, 1
 set antialias, 2
@@ -580,15 +581,15 @@ set ambient, 0.15
 orient mol
 zoom mol, 2.0
 
-# 7) Hochaufloesendes Bild
+# 7) high-resolution image
 # ray 2400, 1800
 # png esp.png, dpi=300
 """
 
 
-# Farbrampen - identisch zu render_esp.RAMP_PYMOL. Rot bleibt in beiden
-# negativ, blau positiv; der Regenbogen schiebt nur Gelb/Gruen/Cyan dazwischen,
-# damit sich die zwei Bildersaetze nebeneinanderlegen lassen.
+# Colour ramps - identical to render_esp.RAMP_PYMOL. Red stays negative in
+# both and blue positive; the rainbow only pushes yellow/green/cyan in between,
+# so that the two image sets can be laid side by side.
 PML_RAMPS = {
     "redblue": ["red", "white", "blue"],
     "rainbow": ["red", "yellow", "green", "cyan", "blue"],
@@ -602,10 +603,10 @@ def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
         isosurface = f"isosurface surf, dens, {iso}"
         surface_target = "surf"
     else:
-        load_density = "# keine Dichtedatei vorhanden"
-        isosurface = ("# Ersatz: van-der-Waals-Oberflaeche aus der Struktur.\n"
-                      "# Fuer die Politzer/Murray-Konvention (rho = 0.001 a.u.)\n"
-                      "# waere die Dichtedatei td.cube noetig.\n"
+        load_density = "# no density file available"
+        isosurface = ("# Substitute: van der Waals surface from the structure.\n"
+                      "# The Politzer/Murray convention (rho = 0.001 a.u.)\n"
+                      "# would need the density file td.cube.\n"
                       "show surface, mol\n"
                       "set surface_solvent, 0")
         surface_target = "mol"
@@ -633,53 +634,53 @@ def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
 
 
 # ----------------------------------------------------------------------------
-# Hauptprogramm
+# Main program
 # ----------------------------------------------------------------------------
 
 def main(argv=None):
     p = argparse.ArgumentParser(
-        description="Turbomole-pointval-Gitterdateien (td.xyz, tp.xyz) "
-                    "nach Gaussian-Cube konvertieren.",
+        description="Convert Turbomole pointval grid files (td.xyz, tp.xyz) "
+                    "to Gaussian cube.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Beispiel:\n"
+        epilog="Example:\n"
                "  python xyzToCube.py --struct brombenzol_aro_opti.mol "
                "td.xyz tp.xyz --pymol\n",
     )
     p.add_argument("grids", nargs="+",
-                   help="Turbomole-Gitterdateien (z.B. td.xyz tp.xyz)")
+                   help="Turbomole grid files (e.g. td.xyz tp.xyz)")
     p.add_argument("--struct", "-s", required=True,
-                   help="Strukturdatei: .xyz, .mol oder .sdf")
+                   help="structure file: .xyz, .mol or .sdf")
     p.add_argument("--struct-unit", choices=["angstrom", "bohr"],
                    default="angstrom",
-                   help="Einheit der Strukturdatei (Standard: angstrom); gilt nur fuer .xyz - .mol/.sdf sind immer Angstrom")
+                   help="unit of the structure file (default: angstrom); applies to .xyz only - .mol/.sdf are always Angstrom")
     p.add_argument("--outdir", "-o", default=None,
-                   help="Ausgabeverzeichnis (Standard: neben der Eingabe)")
+                   help="output directory (default: next to the input)")
     p.add_argument("--stride", type=int, default=1,
-                   help="Nur jeden n-ten Gitterpunkt schreiben "
-                        "(2 => 8x kleinere Datei, Standard: 1)")
+                   help="write every n-th grid point only "
+                        "(2 => 8x smaller file, default: 1)")
     p.add_argument("--quiet", "-q", action="store_true")
 
-    # Diese Optionen aendern NICHTS an den Cube-Dateien - sie beschreiben nur
-    # die Szene, die --pymol nebenbei schreibt. Deshalb eine eigene Gruppe und
-    # das Praefix --pml- bei allem, was sonst mit einer gleichnamigen Option in
-    # render_esp.py verwechselt werden koennte.
-    g = p.add_argument_group("PyMOL-Szene (nur zusammen mit --pymol)")
+    # These options change NOTHING about the cube files - they only describe
+    # the scene that --pymol writes on the side. Hence a group of their own and
+    # the --pml- prefix on everything that could otherwise be confused with an
+    # option of the same name in render_esp.py.
+    g = p.add_argument_group("PyMOL scene (only together with --pymol)")
     g.add_argument("--pymol", action="store_true",
-                   help="Zusaetzlich ein fertiges esp.pml schreiben")
+                   help="also write a ready-to-run esp.pml")
     g.add_argument("--esp-range", default="auto",
-                   help="Halbe Breite der ESP-Farbskala in a.u., oder 'auto' "
-                        "(Standard): aus den ESP-Werten auf der Isoflaeche "
-                        "bestimmt, wie in render_esp.py")
+                   help="half width of the ESP colour scale in a.u., or 'auto' "
+                        "(default): determined from the ESP values on the "
+                        "isosurface, as in render_esp.py")
     g.add_argument("--pml-iso", type=float, default=0.001,
-                   help="Isowert der Dichteflaeche IM esp.pml (Standard: "
-                        "0.001). Aendert nur die Szene, nicht die Cube-Daten - "
-                        "im Gegensatz zu --iso in render_esp.py, das die "
-                        "gemessenen Kennwerte verschiebt.")
+                   help="isovalue of the density surface INSIDE esp.pml "
+                        "(default: 0.001). Changes the scene only, not the "
+                        "cube data - unlike --iso in render_esp.py, which "
+                        "shifts the measured statistics.")
     g.add_argument("--transparency", type=float, default=0.15,
-                   help="Oberflaechentransparenz im esp.pml, 0..1 "
-                        "(Standard: 0.15; 0 = opak)")
+                   help="surface transparency in esp.pml, 0..1 "
+                        "(default: 0.15; 0 = opaque)")
     g.add_argument("--rainbow", action="store_true",
-                   help="Regenbogenrampe im esp.pml statt rot-weiss-blau")
+                   help="rainbow ramp in esp.pml instead of red-white-blue")
     args = p.parse_args(argv)
 
     verbose = not args.quiet
@@ -691,27 +692,27 @@ def main(argv=None):
 
     atoms = read_structure(args.struct, unit=args.struct_unit)
     if verbose:
-        print(f"[1] Struktur: {args.struct} -> {len(atoms)} Atome "
-              f"(eingelesen als {args.struct_unit}, gespeichert als Bohr)")
+        print(f"[1] structure: {args.struct} -> {len(atoms)} atoms "
+              f"(read as {args.struct_unit}, stored as Bohr)")
 
-    # Fuer --esp-range auto werden Dichte und ESP nach dem Schreiben noch
-    # einmal gebraucht. Nur dann im Speicher halten: bei 251^3 sind das 63 MB
-    # pro Gitter, die sonst unnoetig liegenbleiben.
+    # For --esp-range auto the density and the ESP are needed once more after
+    # writing. Keep them in memory only then: at 251^3 that is 63 MB per grid,
+    # which would otherwise sit around for nothing.
     need_auto = args.pymol and str(args.esp_range).lower() == "auto"
     cache = {}
 
     written = {}
     for gpath in args.grids:
         if verbose:
-            print(f"[2] Gitterdatei: {gpath}")
+            print(f"[2] grid file: {gpath}")
         info, data = read_values(gpath, verbose=verbose)
 
         n1, n2, n3 = (info["grid"][i][2] for i in range(3))
         if verbose:
-            print(f"    Gitter {n1} x {n2} x {n3}, "
+            print(f"    grid {n1} x {n2} x {n3}, "
                   f"delta = {info['grid'][0][1]} Bohr, "
-                  f"Groesse = '{info['quantity'] or 'unbekannt'}'")
-            print(f"    Wertebereich: {data.min():+.6g} .. {data.max():+.6g}")
+                  f"quantity = '{info['quantity'] or 'unknown'}'")
+            print(f"    value range: {data.min():+.6g} .. {data.max():+.6g}")
 
         base = os.path.splitext(os.path.basename(gpath))[0]
         outdir = args.outdir or os.path.dirname(os.path.abspath(gpath))
@@ -720,7 +721,7 @@ def main(argv=None):
 
         shape, origin, voxel = write_cube(
             outpath, info, data, atoms, stride=args.stride,
-            comment=f"{info['quantity'] or base} - konvertiert aus {os.path.basename(gpath)}",
+            comment=f"{info['quantity'] or base} - converted from {os.path.basename(gpath)}",
         )
         if verbose:
             mb = os.path.getsize(outpath) / 1024 ** 2
@@ -744,7 +745,7 @@ def main(argv=None):
         pml = os.path.join(outdir, "esp.pml")
         esp_cube = written.get("esp")
         if esp_cube is None:
-            print("    ! Keine ESP-Datei erkannt - esp.pml wird uebersprungen.",
+            print("    ! no ESP file recognised - esp.pml is skipped.",
                   file=sys.stderr)
         else:
             rng = None
@@ -753,11 +754,11 @@ def main(argv=None):
                                      iso=args.pml_iso)
                 if rng is None:
                     rng = 0.03
-                    print("    ! Farbskala nicht automatisch bestimmbar "
-                          "(keine Dichtedatei?) - benutze +/- 0.03 a.u.",
+                    print("    ! colour scale not automatically determinable "
+                          "(no density file?) - using +/- 0.03 a.u.",
                           file=sys.stderr)
                 elif verbose:
-                    print(f"    Farbskala automatisch: +/- {rng:.4f} a.u.")
+                    print(f"    colour scale, automatic: +/- {rng:.4f} a.u.")
             else:
                 rng = float(args.esp_range)
 
@@ -771,11 +772,11 @@ def main(argv=None):
                 transparency=args.transparency, rainbow=args.rainbow,
             )
             if verbose:
-                print(f"[3] PyMOL-Skript: {pml}")
-                print(f"    Start mit:  pymol {os.path.basename(pml)}")
+                print(f"[3] PyMOL script: {pml}")
+                print(f"    start with:  pymol {os.path.basename(pml)}")
 
     if verbose:
-        print("Fertig.")
+        print("Done.")
     return 0
 
 

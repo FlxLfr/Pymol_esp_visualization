@@ -4,19 +4,19 @@
 ansi.py
 =======
 
-Minimale Farbunterstuetzung fuer die Konsolenausgabe. Keine Abhaengigkeiten.
+Minimal colour support for the console output. No dependencies.
 
-Farben werden automatisch abgeschaltet, wenn die Ausgabe kein Terminal ist -
-also beim Umleiten in eine Datei oder beim Weiterreichen durch eine Pipe.
-Sonst landen Steuerzeichen wie ``\\x1b[32m`` in den Logdateien.
+Colour is switched off automatically when the output is not a terminal - that
+is, when it is redirected into a file or passed through a pipe. Otherwise
+control sequences such as ``\\x1b[32m`` end up in the log files.
 
-Zusaetzlich respektiert das Modul die Konvention ``NO_COLOR`` (siehe
-https://no-color.org): ist die Umgebungsvariable gesetzt, bleibt alles farblos.
-Mit ``FORCE_COLOR`` laesst sich das Gegenteil erzwingen.
+The module also respects the ``NO_COLOR`` convention (see
+https://no-color.org): if that environment variable is set, everything stays
+plain. ``FORCE_COLOR`` forces the opposite.
 
-Unter Windows muss die Verarbeitung von ANSI-Sequenzen einmal aktiviert werden
-(``ENABLE_VIRTUAL_TERMINAL_PROCESSING``); das erledigt ``_enable_windows_vt``
-ueber die Win32-API, ohne colorama als zusaetzliches Paket.
+On Windows the processing of ANSI sequences has to be enabled once
+(``ENABLE_VIRTUAL_TERMINAL_PROCESSING``); ``_enable_windows_vt`` does that
+through the Win32 API, without colorama as an extra package.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ CYAN = "\033[36m"
 YELLOW = "\033[33m"
 
 def _enable_windows_vt() -> bool:
-    """Schaltet die ANSI-Verarbeitung der Windows-Konsole frei."""
+    """Enables ANSI processing in the Windows console."""
     try:
         import ctypes
 
@@ -61,12 +61,12 @@ def _supported() -> bool:
 ENABLED = _supported()
 
 def disable():
-    """Schaltet die Farbausgabe zur Laufzeit ab (fuer --no-color)."""
+    """Switches colour output off at run time (for --no-color)."""
     global ENABLED
     ENABLED = False
 
 def paint(text, code) -> str:
-    """Faerbt ``text``, oder gibt ihn unveraendert zurueck."""
+    """Colours ``text``, or returns it unchanged."""
     if not ENABLED or not text:
         return text
     return f"{code}{text}{RESET}"
@@ -84,7 +84,7 @@ def bold(text):
     return paint(text, BOLD)
 
 # ----------------------------------------------------------------------------
-# Chemie-spezifisch
+# Chemistry-specific
 # ----------------------------------------------------------------------------
 
 HALOGEN_SYMBOLS = ("F", "Cl", "Br", "I", "At")
@@ -92,11 +92,11 @@ HALOGEN_SYMBOLS = ("F", "Cl", "Br", "I", "At")
 _LABEL = re.compile(r"^([A-Za-z]+)(\d*)$")
 
 def atom_label(label: str) -> str:
-    """Faerbt das Elementsymbol eines Atomlabels, wenn es ein Halogen ist.
+    """Colours the element symbol of an atom label if it is a halogen.
 
-    ``"Cl12"`` -> tuerkises ``Cl`` plus normales ``12``. Die laufende Nummer
-    bleibt ungefaerbt, damit das Symbol ins Auge springt und nicht der Index.
-    Nicht-Halogene wie ``"H5"`` bleiben unveraendert.
+    ``"Cl12"`` -> cyan ``Cl`` plus plain ``12``. The running number stays
+    uncoloured, so that the symbol catches the eye and not the index.
+    Non-halogens such as ``"H5"`` are returned unchanged.
     """
     if not label:
         return label
@@ -109,5 +109,5 @@ def atom_label(label: str) -> str:
     return label
 
 def element(symbol: str) -> str:
-    """Faerbt ein blankes Elementsymbol, wenn es ein Halogen ist."""
+    """Colours a bare element symbol if it is a halogen."""
     return cyan(symbol) if symbol in HALOGEN_SYMBOLS else symbol

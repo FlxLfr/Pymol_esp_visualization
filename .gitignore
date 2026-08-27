@@ -9,6 +9,7 @@
 *.cube.part
 td.xyz
 tp.xyz
+README*.bak
 
 # ...except the reference dataset. Those grids are decimated to 0.75 Bohr
 # (~2.3 MB each) and are committed on purpose: they are RAW pointval files, not

@@ -74,7 +74,7 @@ from constants import HARTREE_TO_KCAL, HARTREE_TO_KJ  # noqa: E402
 STRUCT_EXT = (".mol", ".sdf", ".xyz")
 GRID_NAMES = ("td", "tp")
 
-# reference/ liegt neben scripts/, nicht im aktuellen Arbeitsverzeichnis
+# reference/ sits next to scripts/, not in the current working directory
 DEFAULT_ROOT = os.path.normpath(os.path.join(_HERE, "..", "reference"))
 
 
@@ -169,13 +169,13 @@ def convert(entry, stride, struct_unit, force=False):
 
 def write_scene(entry, cubes, esp_range, iso, transparency,
                 filename="esp.pml", rainbow=False):
-    """Schreibt ein PyMOL-Skript neben die Cube-Dateien.
+    """Writes a PyMOL script next to the cube files.
 
-    Damit hat jedes Molekuel nicht nur die fertigen Bilder, sondern auch eine
-    interaktive Szene zum Drehen und Nachschauen - mit exakt der Farbskala, die
-    auch fuer die Bilder verwendet wurde. Beim Zwei-Pass-Lauf wird die Datei im
-    zweiten Durchgang mit der gemeinsamen Skala ueberschrieben, sie passt also
-    immer zum zuletzt erzeugten Bildersatz.
+    That way every molecule gets not only the finished images but also an
+    interactive scene for turning it around and taking a closer look - with
+    exactly the colour scale that was used for the images. In a two-pass run
+    the file is overwritten in the second pass with the common scale, so it
+    always matches the image set produced last.
     """
     folder = entry["dir"]
     path = os.path.join(folder, filename)
@@ -298,8 +298,8 @@ def write_summary(path, rows, common_range=None):
 def main(argv=None):
     p = argparse.ArgumentParser(
         description="Batch conversion and rendering of molecular ESP data.")
-    # Ohne --root wird der reference/-Ordner des Repositoriums benutzt, egal aus
-    # welchem Verzeichnis das Skript aufgerufen wird. Das ist der Selbsttest.
+    # Without --root the repository's reference/ folder is used, no matter
+    # which directory the script is called from. That is the self test.
     p.add_argument("--root", default=DEFAULT_ROOT,
                    help="directory tree to search for molecule folders "
                         "(default: the repository's reference/ folder)")
@@ -350,13 +350,13 @@ def main(argv=None):
         ansi.disable()
 
     is_reference = os.path.abspath(args.root) == os.path.abspath(DEFAULT_ROOT)
-    # Auch die PyMOL-Szene des Selbsttests darf nichts Committetes ueberschreiben.
-    # Eigener Name, sonst ueberschreibt ein Regenbogenlauf die Szene des
-    # rot-weiss-blauen Laufs - die Bilder liegen aus demselben Grund getrennt.
+    # The self test's PyMOL scene must not overwrite anything committed
+    # either. Its own name, otherwise a rainbow run overwrites the scene of the
+    # red-white-blue run - the images are kept apart for the same reason.
     _stem = "esp_check" if is_reference else "esp"
     pml_name = f"{_stem}{'_rainbow' if args.rainbow else ''}.pml"
     if args.images_dir is None:
-        # Der Selbsttest darf die committeten Referenzbilder nicht ueberschreiben.
+        # The self test must not overwrite the committed reference images.
         args.images_dir = "images_check" if is_reference else "images"
 
     print("=" * 70)
@@ -434,14 +434,14 @@ def main(argv=None):
           f"{'sigma-hole':>12}{'range':>9}")
     print("-" * 70)
     for r in rows:
-        # Platzhalter in derselben Spaltenbreite wie die Zahl, sonst
-        # verrutscht die Zeile bei Molekuelen ohne Halogen.
+        # A placeholder of the same column width as the number, otherwise the
+        # line slips for molecules without a halogen.
         sig = (f"{'-':>12}" if r.get("sigma_max") is None
                else f"{r['sigma_max']:+12.4f}")
         on = (r.get("vmax_atom") or "?")
-        # Bei mehreren Halogenen ist die sigma-Loch-Spalte der GROESSTE Wert.
-        # Damit das nicht so aussieht, als gaebe es nur eines, wird hier
-        # angehaengt, auf welchem Atom er sitzt und wie viele es insgesamt sind.
+        # With several halogens the sigma-hole column holds the LARGEST value.
+        # So that this does not look as if there were only one, the atom it
+        # sits on and the total count are appended here.
         note = ""
         if r.get("n_halogens", 0) > 1:
             note = (f"   {ansi.atom_label(r.get('halogen_atom') or '?')}"

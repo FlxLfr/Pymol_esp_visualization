@@ -1,19 +1,19 @@
-Renderparameter (erzeugt von render_esp.py)
+Render parameters (written by render_esp.py)
 =======================================================
-Struktur          : ..\sandbox\I-Pyr\S12_I-Pyr_OPTI.xyz
-Dichte-Cube       : ..\sandbox\I-Pyr\td.cube
-ESP-Cube          : ..\sandbox\I-Pyr\tp.cube
-Gitter            : 251 x 251 x 251
-Isowert rho       : 0.001 a.u.
-V_S,min           : -0.05638 a.u. (-35.38 kcal/(mol*e))  auf N8
-V_S,max           : +0.04594 a.u. (+28.83 kcal/(mol*e))  auf H10
-sigma-Loch (I7)   : +0.03441 a.u. (+21.59 kcal/(mol*e))  [interpoliert]
-Guertel    (I7)   : -0.01147 a.u. (-7.20 kcal/(mol*e))
-Gitterabstand     : 0.1600 Bohr
-Farbskala         : -0.0600 .. +0.0600 a.u. (automatisch aus den Daten)
-Farbrampe         : rot-weiss-blau
-Transparenz       : 0.15
-Hintergrund       : white
-Bildgroesse       : 2000 x 1600 px, 300 dpi
-Projektion        : orthoskopisch
-Ansichten         : pi, edge, sigma
+Structure         : ..\sandbox\I-Pyr\S12_I-Pyr_OPTI.xyz
+Density cube      : ..\sandbox\I-Pyr\td.cube
+ESP cube          : ..\sandbox\I-Pyr\tp.cube
+Grid              : 251 x 251 x 251
+Isovalue rho      : 0.001 a.u.
+V_S,min           : -0.05638 a.u. (-35.38 kcal/(mol*e))  on N8
+V_S,max           : +0.04594 a.u. (+28.83 kcal/(mol*e))  on H10
+sigma hole (I7)   : +0.03441 a.u. (+21.59 kcal/(mol*e))  [interpolated]
+belt       (I7)   : -0.01147 a.u. (-7.20 kcal/(mol*e))
+Grid spacing      : 0.1600 Bohr
+Colour scale      : -0.0600 .. +0.0600 a.u. (automatic, from the data)
+Colour ramp       : red-white-blue
+Transparency      : 0.15
+Background        : white
+Image size        : 2000 x 1600 px, 300 dpi
+Projection        : orthoscopic
+Views             : pi, edge, sigma

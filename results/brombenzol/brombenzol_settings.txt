@@ -1,19 +1,19 @@
-Renderparameter (erzeugt von render_esp.py)
+Render parameters (written by render_esp.py)
 =======================================================
-Struktur          : ..\sandbox\brombenzol\brombenzol_aro_opti.mol
-Dichte-Cube       : ..\sandbox\brombenzol\td.cube
-ESP-Cube          : ..\sandbox\brombenzol\tp.cube
-Gitter            : 251 x 251 x 251
-Isowert rho       : 0.001 a.u.
-V_S,min           : -0.01882 a.u. (-11.81 kcal/(mol*e))  auf Br12
-V_S,max           : +0.03154 a.u. (+19.79 kcal/(mol*e))  auf H7
-sigma-Loch (Br12) : +0.01629 a.u. (+10.22 kcal/(mol*e))  [interpoliert]
-Guertel    (Br12) : -0.01882 a.u. (-11.81 kcal/(mol*e))
-Gitterabstand     : 0.1200 Bohr
-Farbskala         : -0.0350 .. +0.0350 a.u. (automatisch aus den Daten)
-Farbrampe         : rot-weiss-blau
-Transparenz       : 0.15
-Hintergrund       : white
-Bildgroesse       : 2000 x 1600 px, 300 dpi
-Projektion        : orthoskopisch
-Ansichten         : pi, edge, sigma
+Structure         : ..\sandbox\brombenzol\brombenzol_aro_opti.mol
+Density cube      : ..\sandbox\brombenzol\td.cube
+ESP cube          : ..\sandbox\brombenzol\tp.cube
+Grid              : 251 x 251 x 251
+Isovalue rho      : 0.001 a.u.
+V_S,min           : -0.01882 a.u. (-11.81 kcal/(mol*e))  on Br12
+V_S,max           : +0.03154 a.u. (+19.79 kcal/(mol*e))  on H7
+sigma hole (Br12) : +0.01629 a.u. (+10.22 kcal/(mol*e))  [interpolated]
+belt       (Br12) : -0.01882 a.u. (-11.81 kcal/(mol*e))
+Grid spacing      : 0.1200 Bohr
+Colour scale      : -0.0350 .. +0.0350 a.u. (automatic, from the data)
+Colour ramp       : red-white-blue
+Transparency      : 0.15
+Background        : white
+Image size        : 2000 x 1600 px, 300 dpi
+Projection        : orthoscopic
+Views             : pi, edge, sigma

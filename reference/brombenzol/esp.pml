@@ -1,42 +1,43 @@
 # --------------------------------------------------------------
-# esp.pml - ESP auf Elektronendichte-Isoflaeche
-# Start:  pymol esp.pml       (oder in PyMOL:  @esp.pml)
+# esp.pml - ESP on the electron density isosurface
+# Start:  pymol esp.pml       (or inside PyMOL:  @esp.pml)
 # --------------------------------------------------------------
 
 reinitialize
 
-# 1) Struktur und Volumendaten laden
+# 1) load the structure and the volumetric data
 load brombenzol_aro_opti.mol, mol
 load td.cube, dens
 load tp.cube, esp
 
-# 2) Molekuel als Staebchen
+# 2) the molecule as sticks
 hide everything
 show sticks, mol
 set stick_radius, 0.3
 color grey70, mol and elem C
 util.cnc mol
 
-# 3) Isoflaeche der Elektronendichte bei rho = 0.001 a.u.
-#    (Politzer/Murray-Konvention fuer die "Molekueloberflaeche")
+# 3) isosurface of the electron density at rho = 0.001 a.u.
+#    (the Politzer/Murray convention for the "molecular surface")
 isosurface surf, dens, 0.001
 
-# 4) Farbrampe fuer das ESP; Werte in Hartree/e (a.u.)
-#    -0.035 .. 0.035 a.u.  entspricht -92 .. 92 kJ/(mol*e)
+# 4) colour ramp for the ESP; values in Hartree/e (a.u.)
+#    -0.035 .. 0.035 a.u.  equals -92 .. 92 kJ/(mol*e)
 ramp_new espramp, esp, [-0.035, 0, 0.035], [red, white, blue]
 
-# 5) ESP auf die Oberflaeche mappen
+# 5) map the ESP onto the surface
 set surface_color, espramp, surf
 set surface_quality, 1
 
-#    Transparenz: 0 = opak (kraftigste Farben, Staebchen unsichtbar),
-#    0.15 = Standard (Molekuelgeruest scheint durch),
-#    ab ca. 0.3 wird es unleserlich, weil man durch das ganze Molekuel schaut.
+#    transparency: 0 = opaque (strongest colours, sticks invisible),
+#    0.15 = the default (the skeleton shows through),
+#    from about 0.3 on it becomes unreadable, because you look through the
+#    whole molecule.
 set transparency, 0.15
 set transparency_mode, 2
 set two_sided_lighting, on
 
-# 6) Darstellung / Rendering
+# 6) appearance / rendering
 bg_color white
 set ray_opaque_background, 1
 set antialias, 2
@@ -46,6 +47,6 @@ set ambient, 0.15
 orient mol
 zoom mol, 2.0
 
-# 7) Hochaufloesendes Bild
+# 7) high-resolution image
 # ray 2400, 1800
 # png esp.png, dpi=300

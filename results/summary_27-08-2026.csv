@@ -1,0 +1,11 @@
+molecule,structure,grid,iso_au,shell_points,VS_min_au,VS_max_au,VS_min_kcal,VS_max_kcal,VS_min_kJ,VS_max_kJ,VS_max_on,VS_min_on,halogen,sigma_hole_on,sigma_hole_au,sigma_hole_kcal,sigma_method,belt_min_au,belt_min_kcal,n_halogens,sigma_holes_all,esp_range_used_au,esp_range_mode,colormap
+CN-Pyr,S12_CN-Pyr_OPTI.xyz,251x251x251,0.001,14505,-0.05927,0.05025,-37.19,31.53,-155.6,131.9,H8,N3,,,,,point-based,,,0,,0.0600,auto,redblue
+Cl-NO2-Pyr,S12_Cl-NO2-Pyr_OPTI.xyz,251x251x251,0.001,16332,-0.04545,0.05825,-28.52,36.55,-119.3,152.9,H12,O8,Cl,Cl10,0.02508,15.74,interpolated,-0.03091,-19.39,1,Cl10:0.02508,0.0600,auto,redblue
+I-Pyr,S12_I-Pyr_OPTI.xyz,251x251x251,0.001,16843,-0.05638,0.04594,-35.38,28.83,-148.0,120.6,H10,N8,I,I7,0.03441,21.59,interpolated,-0.01147,-7.20,1,I7:0.03441,0.0600,auto,redblue
+Me-Pyr,S12_Me-Pyr_OPTI.xyz,251x251x251,0.001,14641,-0.06779,0.03647,-42.54,22.89,-178.0,95.8,H12,N10,,,,,point-based,,,0,,0.0700,auto,redblue
+NO2-Pyr,S12_NO2-Pyr_OPTI.xyz,251x251x251,0.001,14452,-0.04712,0.04487,-29.57,28.16,-123.7,117.8,H12,N2,,,,,point-based,,,0,,0.0500,auto,redblue
+Pyridine,S12_Pyridine_OPTI.xyz,251x251x251,0.001,12447,-0.06500,0.03959,-40.79,24.84,-170.7,103.9,H6,N7,,,,,point-based,,,0,,0.0700,auto,redblue
+brombenzol,brombenzol_aro_opti.mol,251x251x251,0.001,38010,-0.01882,0.03154,-11.81,19.79,-49.4,82.8,H7,Br12,Br,Br12,0.01629,10.22,interpolated,-0.01882,-11.81,1,Br12:0.01629,0.0350,auto,redblue
+chlorbenzol,chlorbenzol_aro_opti.mol,251x251x251,0.001,35592,-0.01896,0.03129,-11.90,19.63,-49.8,82.1,H9,Cl12,Cl,Cl12,0.00786,4.93,interpolated,-0.01896,-11.90,1,Cl12:0.00786,0.0350,auto,redblue
+iodbenzol,iodbenzol_aro_opti.mol,251x251x251,0.001,41631,-0.01685,0.03168,-10.57,19.88,-44.2,83.2,H5,I12,I,I12,0.02559,16.06,interpolated,-0.01685,-10.57,1,I12:0.02559,0.0350,auto,redblue
+# common colour scale covering all molecules: +/- 0.0700 a.u.
