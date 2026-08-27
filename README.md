@@ -526,10 +526,11 @@ Pymol_esp_visualization/
 │       ├── td.xyz                raw pointval grids, decimated to 0.60 Bohr
 │       ├── tp.xyz                (32×37×24, 1.7 MB each)
 │       └── images/               reference images
-├── results/                      the delivered image sets — nine molecules
+├── results/                      the delivered image sets — seven molecules
 │   ├── Pyridine/  Me-Pyr/  CN-Pyr/  NO2-Pyr/       pyridines, provided
 │   ├── I-Pyr/  Cl-NO2-Pyr/                          Turbomole data
-│   ├── chlorbenzol/  brombenzol/  iodbenzol/       halobenzenes, provided
+│   ├── brombenzol/                                  the halobenzene example
+│   ├── brombenzol_rainbow/                          the same molecule, --rainbow
 │   └── <molecule>/               *_pi.png  *_edge.png  *_sigma.png
 │                                 *_colorbar.png  *_settings.txt
 ├── tools/                        helper scripts (own environment)
