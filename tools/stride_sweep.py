@@ -131,7 +131,7 @@ def main(argv=None):
                    help="isovalue, fixed across all strides (default: 0.001)")
     p.add_argument("--out", default=None,
                    help="CSV output (default: stride_sweep_<folder>.csv "
-                        "neben den Cube-Dateien)")
+                        "next to the cube files)")
     args = p.parse_args(argv)
 
     folder = os.path.abspath(args.folder)

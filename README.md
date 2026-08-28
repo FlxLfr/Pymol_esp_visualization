@@ -471,11 +471,12 @@ molecule headers in green and halogen symbols in cyan so the relevant lines stan
 out in a long batch run:
 
 ```
-    V_S,max = +0.0312 a.u.  =  +19.6 kcal/(mol*e)   auf H5
-  Lokal am Halogen (Br):
-    sigma-Loch  = +0.0126 a.u.  =   +7.9 kcal/(mol*e)   [144 Punkte]
-    Guertel     = -0.0188 a.u.  =  -11.8 kcal/(mol*e)   [836 Punkte]
-    ! V_S,max liegt auf H5, nicht auf dem Halogen
+  ESP on the rho = 0.001 shell (38010 points):
+    V_S,min = -0.0188 a.u.  =   -49.4 kJ/(mol*e)  =  -11.8 kcal/(mol*e)   on Br12
+    V_S,max = +0.0315 a.u.  =   +82.8 kJ/(mol*e)  =  +19.8 kcal/(mol*e)   on H7
+  Local at the halogen (Br):
+    sigma hole  = +0.0163 a.u.  =   +42.8 kJ/(mol*e)  =  +10.2 kcal/(mol*e)   [interpolated, 0.0 degrees off the axis]
+    belt        = -0.0188 a.u.  =   -49.4 kJ/(mol*e)  =  -11.8 kcal/(mol*e)   [6768 points]
 ```
 
 Colours switch off automatically when the output is redirected to a file or

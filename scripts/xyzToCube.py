@@ -330,7 +330,7 @@ def read_values(path, verbose=True):
                 break
             chunk = remainder + chunk
             cut = chunk.rfind("\n")
-            if cut == -1:                      # extrem lange Zeile - weiterlesen
+            if cut == -1:                      # extremely long line - read on
                 remainder = chunk
                 continue
             remainder = chunk[cut + 1:]
@@ -418,7 +418,7 @@ def write_cube(path, info, data, atoms, stride=1, comment=""):
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(f"{comment or 'cube written by xyzToCube.py'}\n")
         fh.write(f"{info.get('quantity', '') or 'volumetric data'} | "
-                 f"{info.get('title', '')} | Einheiten: Bohr\n")
+                 f"{info.get('title', '')} | units: Bohr\n")
         fh.write(f"{len(atoms):5d} {origin[0]:12.6f} {origin[1]:12.6f} "
                  f"{origin[2]:12.6f}\n")
         for i in range(3):
