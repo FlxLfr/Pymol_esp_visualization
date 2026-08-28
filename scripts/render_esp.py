@@ -569,6 +569,22 @@ def render_all(args):
     if dens.shape != esp.shape:
         raise SystemExit("Density and ESP cube are on different grids.")
 
+    # Do the atoms actually sit in the density? It has to happen before
+    # anything is rendered.
+    #
+    # Checked is the STRUCTURE FILE, not the cube's atom block: PyMOL draws
+    # the sticks from args.struct (see cmd.load below), so that is the
+    # geometry that can disagree with the volumes. The cube's own atoms
+    # always match its density - they were written in the same pass - so
+    # checking those would pass a folder whose .mol was replaced after the
+    # cubes had been made. The sister project checks the cube's atoms,
+    # because VMD builds the molecule from the cube header.
+    if args.struct:
+        struct_atoms = xyzToCube.read_structure(
+            args.struct, unit=getattr(args, "struct_unit", "angstrom"))
+        xyzToCube.check_alignment(dens, struct_atoms, origin, voxel,
+                                  label=os.path.basename(args.struct))
+
     vmin, vmax, npts = esp_statistics(dens, esp, iso=args.iso)
     if npts == 0:
         raise SystemExit(f"No grid points found at rho = {args.iso}. "
@@ -867,6 +883,9 @@ def main(argv):
     p.add_argument("--esp", default=None, help="cube of the ESP")
     p.add_argument("--struct", default=None,
                    help="structure file (.mol/.sdf/.xyz)")
+    p.add_argument("--struct-unit", choices=["angstrom", "bohr"],
+                   default="angstrom",
+                   help="unit of the structure file (default: angstrom)")
     p.add_argument("--prefix", default=None, help="prefix of the image names")
     p.add_argument("--outdir", default="images", help="output folder")
     p.add_argument("--iso", type=float, default=0.001,

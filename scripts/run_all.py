@@ -223,12 +223,13 @@ def write_scene(entry, cubes, esp_range, iso, transparency,
 
 def render(entry, cubes, esp_range, iso, transparency, backgrounds,
            width, height, dpi, prefix=None, images_dir="images",
-           rainbow=False):
+           rainbow=False, struct_unit="angstrom"):
     folder = entry["dir"]
     args = types.SimpleNamespace(
         density=cubes["td"],
         esp=cubes["tp"],
         struct=entry["struct"],
+        struct_unit=struct_unit,
         prefix=prefix or os.path.basename(os.path.normpath(folder)),
         outdir=os.path.join(folder, images_dir),
         iso=iso,
@@ -424,20 +425,35 @@ def main(argv=None):
     for e in entries:
         print(f"  - {e['dir']}  (structure: {os.path.basename(e['struct'])})")
 
-    rows = []
+    # One unusable molecule must not cost the other eight their run: it is
+    # skipped, named again at the end, and the exit code says something went
+    # wrong. Every other error still stops the run - a mismatched structure is
+    # the one failure that is both survivable and worth continuing past.
+    rows, ok_entries, skipped_bad = [], [], []
     for e in entries:
         name = os.path.basename(os.path.normpath(e["dir"]))
         print("\n" + ansi.paint(f"[{name}]", ansi.GREEN + ansi.BOLD))
         cubes = convert(e, args.stride, args.struct_unit, args.force_convert)
-        res = render(e, cubes, args.esp_range, args.iso, args.transparency,
-                     args.backgrounds, args.width, args.height, args.dpi,
-                     images_dir=args.images_dir,
-                     rainbow=args.rainbow)
+        try:
+            res = render(e, cubes, args.esp_range, args.iso, args.transparency,
+                         args.backgrounds, args.width, args.height, args.dpi,
+                         images_dir=args.images_dir,
+                         rainbow=args.rainbow,
+                         struct_unit=args.struct_unit)
+        except xyzToCube.StructureGridMismatch as err:
+            print(f"    ! {err}")
+            print(f"    ! {name} skipped - no images written.")
+            skipped_bad.append(name)
+            continue
         pml = write_scene(e, cubes, res["esp_range"], args.iso,
                           args.transparency, filename=pml_name,
                           rainbow=args.rainbow)
         print(f"    -> {pml}")
         rows.append(res)
+        ok_entries.append(e)
+    entries = ok_entries
+    if not rows:
+        raise SystemExit("No molecule could be rendered.")
 
     common = max(r["esp_range"] for r in rows)
 
@@ -452,7 +468,8 @@ def main(argv=None):
             res = render(e, cubes, common, args.iso, args.transparency,
                          args.backgrounds, args.width, args.height, args.dpi,
                          images_dir=args.images_dir,
-                         rainbow=args.rainbow)
+                         rainbow=args.rainbow,
+                         struct_unit=args.struct_unit)
             pml = write_scene(e, cubes, common, args.iso, args.transparency,
                               filename=pml_name, rainbow=args.rainbow)
             print(f"    -> {pml}")
@@ -487,6 +504,10 @@ def main(argv=None):
     print("-" * 70)
     print(f"Common scale covering all molecules: +/- {common:.4f} a.u.")
     print(f"Summary written to {summary}")
+    if skipped_bad:
+        print(f"\n! skipped, structure and grid do not match: "
+              f"{', '.join(skipped_bad)}")
+        return 1
     return 0
 
 
