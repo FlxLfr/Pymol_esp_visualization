@@ -267,10 +267,11 @@ The script loads the structure and both cubes, builds the ρ = 0.001 isosurface,
 Handy while exploring:
 
 ```
-turn x, 90              # tip into the ring plane
-set transparency, 0     # opaque, strongest colours
-set transparency, 0.15  # skeleton shows through (default)
-disable espramp         # hide the colour bar
+turn x, 90                          # tip into the ring plane
+set transparency, 0                 # opaque, strongest colours
+set transparency, 0.15              # skeleton shows through (default)
+disable espramp                     # hide the colour bar
+set.bond stickradius, 0.XX, mol     # change the radius of the atom sticks
 ```
 
 `esp.pml` always carries the colour scale that was actually used for that  molecule's images, so what you see interactively matches the figure set.
