@@ -13,9 +13,9 @@ Walks a directory tree, and for every molecule folder it finds:
   2. renders the standard set of ESP images,
   3. records V_S,min and V_S,max.
 
-Finally it writes a dated ``summary_<DD-MM-YYYY>.csv`` with the surface ESP
+Finally it writes a dated ``summary_<HH-MM>_<DD-MM-YYYY>.csv`` with the surface ESP
 statistics of every molecule, and tells you which colour-scale range covers
-all of them. A ``--rainbow`` run writes its own ``summary_rainbow_<date>.csv``,
+all of them. A ``--rainbow`` run writes its own ``summary_rainbow_<time>_<date>.csv``,
 so no run overwrites the summary of another.
 
 
@@ -213,19 +213,23 @@ def render(entry, cubes, esp_range, iso, transparency, backgrounds,
 
 
 def summary_name(is_reference, rainbow, when=None):
-    """summary[_check][_rainbow]_DD-MM-YYYY.csv
+    """summary[_check][_rainbow]_HH-MM_DD-MM-YYYY.csv
 
-    Dated on purpose, so that a later run does not silently overwrite the
-    summary of an earlier one. The _rainbow part matters just as much: the
-    scene and the images already carry that suffix, and without it here the
-    CSV was the one file a --rainbow run clobbered - a run over one molecule
-    replaced the summary of the whole set, and the loss was invisible until
-    someone opened the file.
+    Time-stamped on purpose, so that a later run does not silently overwrite
+    the summary of an earlier one. The date alone was not enough: two runs on
+    the same day - the usual case while a parameter is being settled - landed
+    on the same name again. The minute is the coarsest unit that separates
+    them in practice.
+
+    The _rainbow part matters just as much: the scene and the images already
+    carry that suffix, and without it here the CSV was the one file a
+    --rainbow run clobbered - a run over one molecule replaced the summary of
+    the whole set, and the loss was invisible until someone opened the file.
 
     The same name is built in the sister project (run_allVMD.py), so
     summaries from the two pipelines can be filed next to each other.
     """
-    stamp = (when or datetime.date.today()).strftime("%d-%m-%Y")
+    stamp = (when or datetime.datetime.now()).strftime("%H-%M_%d-%m-%Y")
     parts = ["summary"]
     if is_reference:
         parts.append("check")
@@ -342,8 +346,8 @@ def main(argv=None):
                         "setting the NO_COLOR environment variable)")
     p.add_argument("--summary", default=None,
                    help="path of the CSV summary (default "
-                        "<root>/summary_DD-MM-YYYY.csv, with _check on the "
-                        "self test and _rainbow with --rainbow)")
+                        "<root>/summary_HH-MM_DD-MM-YYYY.csv, with _check "
+                        "on the self test and _rainbow with --rainbow)")
     args = p.parse_args(argv)
 
     if args.no_color:

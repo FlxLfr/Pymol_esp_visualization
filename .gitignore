@@ -23,7 +23,7 @@ README*.bak
 # It must never overwrite or shadow the committed reference images.
 **/images_check/
 **/esp_check.pml
-reference/summary_check.csv
+reference/summary_check*.csv
 
 # Scratch space for experiments and large intermediate files
 sandbox/*
