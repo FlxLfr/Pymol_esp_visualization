@@ -359,7 +359,7 @@ Then:
 
 ```bash
 cd scripts
-python run_all.py --root ../sandbox --two-pass
+python run_all.py --root ../sandbox
 ```
 
 This converts what needs converting, renders every molecule, writes an `esp.pml`
