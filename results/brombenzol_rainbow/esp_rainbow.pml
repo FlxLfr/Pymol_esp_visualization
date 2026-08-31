@@ -23,7 +23,7 @@ isosurface surf, dens, 0.001
 
 # 4) colour ramp for the ESP; values in Hartree/e (a.u.)
 #    -0.035 .. 0.035 a.u.  equals -92 .. 92 kJ/(mol*e)
-ramp_new espramp, esp, [-0.035, 0, 0.035], [red, white, blue]
+ramp_new espramp, esp, [-0.035, -0.0175, 0, 0.0175, 0.035], [red, yellow, green, cyan, blue]
 
 # 5) map the ESP onto the surface
 set surface_color, espramp, surf

@@ -6,7 +6,7 @@
 reinitialize
 
 # 1) load the structure and the volumetric data
-load brombenzol_aro_opti.mol, mol
+load S12_Me-Pyr_OPTI.xyz, mol
 load td.cube, dens
 load tp.cube, esp
 
@@ -22,8 +22,8 @@ util.cnc mol
 isosurface surf, dens, 0.001
 
 # 4) colour ramp for the ESP; values in Hartree/e (a.u.)
-#    -0.035 .. 0.035 a.u.  equals -92 .. 92 kJ/(mol*e)
-ramp_new espramp, esp, [-0.035, 0, 0.035], [red, white, blue]
+#    -0.07 .. 0.07 a.u.  equals -184 .. 184 kJ/(mol*e)
+ramp_new espramp, esp, [-0.07, 0, 0.07], [red, white, blue]
 
 # 5) map the ESP onto the surface
 set surface_color, espramp, surf
