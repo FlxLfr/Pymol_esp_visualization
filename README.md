@@ -214,6 +214,7 @@ They do nothing without `--pymol`, which is why `--help` lists them in their own
 | `--esp-range` | `auto` | half-width of the colour scale in a.u., or `auto` — derived from the ESP on the isosurface, exactly as `render_esp.py` does it. |
 | `--pml-iso` | `0.001` | isovalue **drawn in the scene**. Deliberately named apart from `render_esp.py`'s `--iso`: that one moves the measured numbers, this one only the picture. |
 | `--transparency` | `0.15` | surface transparency, 0…1. `0` = opaque. |
+| `--stick-size` | `0.10` | stick radius of the skeleton in Å. Thin sticks locate a coloured patch without covering it|
 | `--rainbow` | off | rainbow ramp in the scene instead of red–white–blue; writes `esp_rainbow.pml` so the standard scene survives. |
 
 #### Examples
@@ -312,6 +313,7 @@ Every molecule therefore lands in the same orientation automatically — that is
 | `--iso` | `0.001` | density isovalue. **Changes the measured numbers**, not just the picture — see the background document before touching it. |
 | `--esp-range` | `auto` | `auto`, or a fixed half-width in a.u. such as `0.035`. Visual only; no computed value depends on it. |
 | `--transparency` | `0.15` | 0…1. `0` = opaque and strongest colours; above ~0.3 the profile views become unreadable. |
+| `--stick-size` | `0.10` | stick radius of the skeleton in Å.|
 | `--backgrounds` | `white` | one or more background colours, e.g. `--backgrounds white black` renders each view twice. |
 | `--width` | `2000` | image width in px |
 | `--height` | `1600` | image height in px |
@@ -379,6 +381,7 @@ arguments** it runs on `reference/` instead — the smoke test from §1.3.
 | `--rainbow` | off | rainbow ramp; writes a separate `<molecule>_rainbow_*` set and `esp_rainbow.pml` |
 | `--iso` | `0.001` | density isovalue, passed through to `render_esp.py` |
 | `--transparency` | `0.15` | passed through |
+| `--stick-size` | `0.10` | passed through to the images and to the `esp.pml` written beside them |
 | `--backgrounds` | `white` | passed through |
 | `--width` | `2000` | passed through |
 | `--height` | `1600` | passed through |

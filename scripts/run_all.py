@@ -199,7 +199,8 @@ def convert(entry, stride, struct_unit, force=False):
 
 
 def write_scene(entry, cubes, esp_range, iso, transparency,
-                filename="esp.pml", rainbow=False):
+                filename="esp.pml", rainbow=False,
+                stick_size=xyzToCube.STICK_SIZE_DEFAULT):
     """Writes a PyMOL script next to the cube files.
 
     That way every molecule gets not only the finished images but also an
@@ -217,13 +218,15 @@ def write_scene(entry, cubes, esp_range, iso, transparency,
         esp_cube=os.path.basename(cubes["tp"]),
         vmin=-esp_range, vmax=esp_range,
         iso=iso, transparency=transparency, rainbow=rainbow,
+        stick_size=stick_size,
     )
     return path
 
 
 def render(entry, cubes, esp_range, iso, transparency, backgrounds,
            width, height, dpi, prefix=None, images_dir="images",
-           rainbow=False, struct_unit="angstrom"):
+           rainbow=False, struct_unit="angstrom",
+           stick_size=xyzToCube.STICK_SIZE_DEFAULT):
     folder = entry["dir"]
     args = types.SimpleNamespace(
         density=cubes["td"],
@@ -240,6 +243,7 @@ def render(entry, cubes, esp_range, iso, transparency, backgrounds,
         height=height,
         dpi=dpi,
         rainbow=rainbow,
+        stick_size=stick_size,
     )
     return render_esp.render_all(args)
 
@@ -365,6 +369,11 @@ def main(argv=None):
                         "largest range found")
     p.add_argument("--iso", type=float, default=0.001)
     p.add_argument("--transparency", type=float, default=0.15)
+    p.add_argument("--stick-size", type=float,
+                   default=xyzToCube.STICK_SIZE_DEFAULT,
+                   help="stick radius of the skeleton in Angstrom "
+                        "(default: %(default)g); applies to the images and to "
+                        "the esp.pml written next to them")
     p.add_argument("--backgrounds", nargs="+", default=["white"])
     p.add_argument("--width", type=int, default=2000)
     p.add_argument("--height", type=int, default=1600)
@@ -439,7 +448,8 @@ def main(argv=None):
                          args.backgrounds, args.width, args.height, args.dpi,
                          images_dir=args.images_dir,
                          rainbow=args.rainbow,
-                         struct_unit=args.struct_unit)
+                         struct_unit=args.struct_unit,
+                         stick_size=args.stick_size)
         except xyzToCube.StructureGridMismatch as err:
             print(f"    ! {err}")
             print(f"    ! {name} skipped - no images written.")
@@ -447,7 +457,7 @@ def main(argv=None):
             continue
         pml = write_scene(e, cubes, res["esp_range"], args.iso,
                           args.transparency, filename=pml_name,
-                          rainbow=args.rainbow)
+                          rainbow=args.rainbow, stick_size=args.stick_size)
         print(f"    -> {pml}")
         rows.append(res)
         ok_entries.append(e)
@@ -469,9 +479,11 @@ def main(argv=None):
                          args.backgrounds, args.width, args.height, args.dpi,
                          images_dir=args.images_dir,
                          rainbow=args.rainbow,
-                         struct_unit=args.struct_unit)
+                         struct_unit=args.struct_unit,
+                         stick_size=args.stick_size)
             pml = write_scene(e, cubes, common, args.iso, args.transparency,
-                              filename=pml_name, rainbow=args.rainbow)
+                              filename=pml_name, rainbow=args.rainbow,
+                              stick_size=args.stick_size)
             print(f"    -> {pml}")
             rows.append(res)
     elif args.two_pass and len(rows) <= 1:

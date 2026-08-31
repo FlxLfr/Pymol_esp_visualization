@@ -701,7 +701,8 @@ def render_all(args):
 
     cmd.hide("everything")
     cmd.show("sticks", "mol")
-    cmd.set("stick_radius", 0.10)
+    cmd.set("stick_radius", getattr(args, "stick_size",
+                                    xyzToCube.STICK_SIZE_DEFAULT))
     cmd.color("grey20", "mol and elem C")
     cmd.util.cnc("mol")
 
@@ -717,6 +718,12 @@ def render_all(args):
     cmd.set("two_sided_lighting", 1)
     cmd.set("specular", 0.2)
     cmd.set("ambient", 0.15)
+    # No cast shadows. On a transparent surface the shadow of the skeleton
+    # reads as a dark patch of potential and competes with the colour that
+    # carries the information. The sister project switches them off as well
+    # (esp_template.tcl: display shadows off), so both image sets are lit the
+    # same way and the comparison measures the viewer, not the lighting.
+    cmd.set("ray_shadows", 0)
     cmd.set("ray_opaque_background", 1)
     cmd.set("antialias", 2)
     cmd.set("orthoscopic", 1)              # no perspective -> comparable
@@ -897,6 +904,12 @@ def main(argv):
                         "0 = opaque, clearest colours; 0.3+ makes the profile "
                         "and axial views unreadable, because you look through "
                         "the whole molecule.")
+    p.add_argument("--stick-size", type=float,
+                   default=xyzToCube.STICK_SIZE_DEFAULT,
+                   help=f"stick radius of the skeleton in Angstrom "
+                        f"(default: {xyzToCube.STICK_SIZE_DEFAULT:g}). Thin "
+                        f"sticks keep the surface readable; from about 0.2 on "
+                        f"they hide the colour they are meant to locate.")
     p.add_argument("--backgrounds", nargs="+", default=["white"],
                    help="background colours, e.g. white black")
     p.add_argument("--width", type=int, default=2000)

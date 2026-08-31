@@ -621,6 +621,14 @@ def check_alignment(density, atoms, origin, voxel, label=""):
 # Generating the PyMOL script
 # ----------------------------------------------------------------------------
 
+# Stick radius of the skeleton in Angstrom. Thin on purpose: the sticks are
+# there to say WHERE on the molecule a coloured patch sits, not to be looked at
+# themselves. Wider ones cover the surface they are supposed to explain, and
+# behind a transparent surface they turn into a dark band. Defined here and
+# imported by render_esp.py and run_all.py, so the interactive scene and the
+# rendered images cannot drift apart - they already had, at 0.3 against 0.1.
+STICK_SIZE_DEFAULT = 0.10
+
 PML_TEMPLATE = """# --------------------------------------------------------------
 # esp.pml - ESP on the electron density isosurface
 # Start:  pymol esp.pml       (or inside PyMOL:  @esp.pml)
@@ -636,7 +644,7 @@ load {esp_cube}, esp
 # 2) the molecule as sticks
 hide everything
 show sticks, mol
-set stick_radius, 0.3
+set stick_radius, {stick_size}
 color grey70, mol and elem C
 util.cnc mol
 
@@ -667,6 +675,10 @@ set antialias, 2
 set ray_trace_mode, 0
 set specular, 0.2
 set ambient, 0.15
+# No cast shadows - a shadow on the surface reads as a dark patch of potential.
+# The same setting is used when the images are rendered (render_esp.py), so the
+# interactive scene shows what the PNGs will show.
+set ray_shadows, 0
 orient mol
 zoom mol, 2.0
 
@@ -686,7 +698,8 @@ PML_RAMPS = {
 
 
 def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
-                       iso=0.001, transparency=0.15, rainbow=False):
+                       iso=0.001, transparency=0.15, rainbow=False,
+                       stick_size=STICK_SIZE_DEFAULT):
     if density_cube:
         load_density = f"load {density_cube}, dens"
         isosurface = f"isosurface surf, dens, {iso}"
@@ -711,6 +724,7 @@ def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
         surface_target=surface_target,
         iso=iso,
         transparency=transparency,
+        stick_size=f"{stick_size:g}",
         vmin=vmin, vmax=vmax,
         kvmin=vmin * HARTREE_TO_KJ, kvmax=vmax * HARTREE_TO_KJ,
         ramp_levels=", ".join(
@@ -768,6 +782,11 @@ def main(argv=None):
     g.add_argument("--transparency", type=float, default=0.15,
                    help="surface transparency in esp.pml, 0..1 "
                         "(default: 0.15; 0 = opaque)")
+    g.add_argument("--stick-size", type=float, default=STICK_SIZE_DEFAULT,
+                   help=f"stick radius of the skeleton in esp.pml, in Angstrom "
+                        f"(default: {STICK_SIZE_DEFAULT:g}). Thin sticks keep "
+                        f"the surface readable; from about 0.2 on they start "
+                        f"to hide the colour behind them.")
     g.add_argument("--rainbow", action="store_true",
                    help="rainbow ramp in esp.pml instead of red-white-blue")
     args = p.parse_args(argv)
@@ -859,6 +878,7 @@ def main(argv=None):
                 esp_cube=os.path.basename(esp_cube),
                 vmin=-rng, vmax=rng, iso=args.pml_iso,
                 transparency=args.transparency, rainbow=args.rainbow,
+                stick_size=args.stick_size,
             )
             if verbose:
                 print(f"[3] PyMOL script: {pml}")
