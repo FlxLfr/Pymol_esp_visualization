@@ -109,6 +109,11 @@ def shell_points(density, esp, origin, voxel, iso=0.001,
     return pos, esp[mask]
 
 
+# van der Waals radii after Bondi (J. Phys. Chem. 1964, 68, 441), Angstrom.
+# Only as an order of magnitude for the distance limit of the sigma-hole
+# search.
+VDW_ANGSTROM = {9: 1.47, 17: 1.75, 35: 1.85, 53: 1.98}
+
 def halogen_axes(atoms):
     """All halogens with their C-X axis.
 
@@ -376,10 +381,8 @@ def sigma_hole_interpolated(density, esp, origin, voxel, atoms, iso=0.001,
     return result
 
 
-# ----------------------------------------------------------------------------
-# Orientation from the geometry
-# ----------------------------------------------------------------------------
-
+# Elements that can carry a sigma hole. Fluorine is listed although it has
+# none - the reported angle is what says so (see the cone search above).
 HALOGENS = {9: "F", 17: "Cl", 35: "Br", 53: "I"}
 
 # ----------------------------------------------------------------------------
@@ -406,10 +409,7 @@ HALOGENS = {9: "F", 17: "Cl", 35: "Br", 53: "I"}
 # beyond the nuclei therefore has to be added here - the rho = 0.001 surface
 # sits about 1.7 to 2.1 Angstrom outside the outermost nuclei, and 2.4 covers
 # that with a narrow margin.
-#
-# This used to be an option (--buffer). It was taken out because no measured
-# value depends on it, and a different margin only produces an image set that
-# can no longer be laid beside the others.
+
 BUFFER_ANGSTROM = 2.4
 
 RAMP_PYMOL = {
@@ -433,22 +433,19 @@ def ramp_levels(rng, rainbow=False):
     levels = [-rng + 2.0 * rng * i / (n - 1) for i in range(n)]
     return levels, colors
 
-# van der Waals radii after Bondi (J. Phys. Chem. 1964, 68, 441), Angstrom.
-# Only as an order of magnitude for the distance limit of the sigma-hole
-# search.
-VDW_ANGSTROM = {9: 1.47, 17: 1.75, 35: 1.85, 53: 1.98}
-
 # Reverse lookup, atomic number -> symbol, derived from the same list with
-# which xyzToCube.py translates in the other direction. There used to be a
-# second, hand-maintained table of 20 entries here: a molecule with an element
-# missing from it converted cleanly and was then labelled "Z13" instead of
-# "Al13". One source, both directions.
+# which xyzToCube.py translates in the other direction.
+
 Z_SYMBOL = {i + 1: sym for i, sym in enumerate(xyzToCube.ELEMENTS)}
 
 
 def z_symbol(z):
     return Z_SYMBOL.get(int(z), f"Z{int(z)}")
 
+
+# ----------------------------------------------------------------------------
+# Orientation from the geometry
+# ----------------------------------------------------------------------------
 
 def molecular_frame(atoms, halogen_index=None):
     """Determines a reproducible molecular frame.

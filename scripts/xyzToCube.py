@@ -5,8 +5,7 @@ xyzToCube.py
 ============
 
 Converts Turbomole ``pointval`` grid files (td.xyz, tp.xyz, ...) into the
-Gaussian cube format, so that they can be loaded into PyMOL, VMD, ChimeraX,
-Avogadro or Multiwfn.
+Gaussian cube format, so that they can be loaded into PyMOL, VMD or ChimeraX.
 
 Background
 ----------
