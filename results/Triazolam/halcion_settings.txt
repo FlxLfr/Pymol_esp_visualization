@@ -1,0 +1,22 @@
+Render parameters (written by render_esp.py)
+=======================================================
+Structure         : ..\sandbox\halcion\Halcion.mol
+Density cube      : ..\sandbox\halcion\td.cube
+ESP cube          : ..\sandbox\halcion\tp.cube
+Grid              : 132 x 101 x 106
+Isovalue rho      : 0.001 a.u.
+V_S,min           : -0.08429 a.u. (-52.89 kcal/(mol*e))  on N4
+V_S,max           : +0.05432 a.u. (+34.09 kcal/(mol*e))  on H27
+sigma hole (Cl21) : +0.01709 a.u. (+10.73 kcal/(mol*e))  [interpolated]
+belt       (Cl21) : -0.01836 a.u. (-11.52 kcal/(mol*e))
+sigma hole (Cl11) : +0.01440 a.u. (+9.03 kcal/(mol*e))  [interpolated]
+belt       (Cl11) : -0.01095 a.u. (-6.87 kcal/(mol*e))
+sigma view on     : Cl21 (strongest sigma hole)
+Grid spacing      : 0.2500 Bohr
+Colour scale      : -0.0850 .. +0.0850 a.u. (automatic, from the data)
+Colour ramp       : red-white-blue
+Transparency      : 0.15
+Background        : white
+Image size        : 2000 x 1600 px, 300 dpi
+Projection        : orthoscopic
+Views             : pi, edge, sigma
