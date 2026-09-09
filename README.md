@@ -562,13 +562,6 @@ backend that the conda-forge PyMOL build is not compiled with. PyMOL uses its
 built-in marching-tetrahedra routine instead; same isosurface, slightly slower.
 Nothing to fix.
 
-**The molecule floats next to its surface instead of inside it.**
-Unit mismatch. The grid is in Bohr, the structure file is probably in Å. Check
-the `--struct-unit` setting.
-
-**The molecule looks mirrored or transposed.**
-Grid index order. Turbomole varies *x* fastest, cube varies *z* fastest.
-`xyzToCube.py` handles this; a hand-written converter usually does not.
 
 **The molecule is tiny in the middle of a large empty image.**
 Something zoomed on the isosurface object. A PyMOL isosurface carries the extent
@@ -654,4 +647,4 @@ incorrectly. The provided scripts set this already.
 
 *Practical Bioinformatics Project — Visualization of Molecular Electrostatic
 Potentials. Method, parameter study, results and references:
-[`docs/ESP_Visualization_Background.docx`](docs/ESP_Visualization_Background.docx).*
+[`docs/ProjectElaborations``docs/PythonElaborations`](docs/).*
