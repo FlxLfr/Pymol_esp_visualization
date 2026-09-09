@@ -513,7 +513,7 @@ NO_COLOR=1 python run_all.py --root ../sandbox
 In order to create your own files to test the application with your own molecules, a script  is provided within the /tools folder:
 `tools/CreateTpTdFromSmiles.py`.
 
-Running this script needs a seperate environment — see `tools/environment-testdata.yml` and all infos about it can be found in the `tools/README.txt`.
+Running this script needs a separate environment — see `tools/environment-testdata.yml`; all infos about it can be found in `tools/README.md`.
 
 ## 8. Repository layout
 
@@ -544,6 +544,7 @@ Pymol_esp_visualization/
 │   └── <molecule>/               *_pi.png  *_edge.png  *_sigma.png
 │                                 *_colorbar.png  *_settings.txt
 ├── tools/                        helper scripts (own environment)
+│   ├── README.md                 test data, reference set, parameter study
 │   ├── CreateTpTdFromSmiles.py   test data from a SMILES string
 │   ├── make_reference.py         decimated reference set from a full folder
 │   ├── iso_sweep.py              parameter study, isovalue

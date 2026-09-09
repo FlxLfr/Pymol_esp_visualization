@@ -24,7 +24,7 @@ Flow::
 
     SMILES --RDKit--> 3D geometry --PySCF--> density matrix --> rho(r), V(r)
 
-Details, choice of parameters and limitations are in ``README.txt`` in the same
+Details, choice of parameters and limitations are in ``README.md`` in the same
 folder. In short: these are **test fixtures, not reference data**.
 
 Call

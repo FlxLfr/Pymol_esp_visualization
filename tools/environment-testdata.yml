@@ -3,7 +3,7 @@
 # !! LINUX / macOS ONLY. PySCF has no win-64 build on conda-forge and no
 # !! Windows wheels on PyPI. On Windows this file fails with
 # !!     PackagesNotFoundError: ... - pyscf
-# !! Use WSL - see README.txt, section "PLATFORM REQUIREMENT".
+# !! Use WSL - see README.md, section 1 "Platform requirement - read first".
 # !! The actual workflow (scripts/) is unaffected and runs on Windows.
 #
 #   conda env create -f tools/environment-testdata.yml
