@@ -1,30 +1,29 @@
 ================================================================================
-tools/CreateTpTdFromSmiles.py - test data for the ESP workflow
+tools/ - test data, the reference dataset and the parameter study
+================================================================================
+
+Four scripts that sit OUTSIDE the rendering workflow. None of them is called
+by run_all.py, and nothing in scripts/ imports them.
+
+    CreateTpTdFromSmiles.py   generates Turbomole-format test data from SMILES
+    make_reference.py         builds the committed self-test dataset
+    iso_sweep.py              varies the isovalue      -> ProjectElaboration.pdf 4.1
+    stride_sweep.py           varies the grid stride   -> ProjectElaboration.pdf 4.2
+
+
+================================================================================
+CreateTpTdFromSmiles.py - test data for the ESP workflow
 ================================================================================
 
 WHAT THIS IS FOR
 ----------------
 
-The workflow in scripts/ was developed on three halobenzenes: chloro-, bromo-
-and iodobenzene. Structurally these are so similar that whole classes of bugs
-cannot show up. Open questions were:
-
-  * What happens when a molecule contains a group more negative than the
-    halogen belt? In all three test molecules V_S,min sat on the halogen, so
-    the "V_S,min" and "belt" lines always reported the same number. Whether
-    the separation works at all was untested.
-
-  * What happens with a molecule WITHOUT a halogen? There is no C-X axis for
-    the orientation to align to, and the sigma-hole analysis has nothing to do.
-    Does the script crash, or fall back cleanly?
-
-  * Does xyzToCube.py also handle grids that do NOT come from Turbomole -
-    different box dimensions, different origin, different point counts?
+The workflow in scripts/ was developed on three halobenzenes and some pyridine derivates:
+Structurally these are so similar that whole classes of bugs cannot show up.
 
 There is no public database of Turbomole pointval files. They are the
 intermediate output of one particular calculation in one particular group;
-nobody archives them. So we generate our own, aimed at exactly the cases we
-are missing.
+nobody archives them. So we generate our own with theh help of this script.
 
 
 PLATFORM REQUIREMENT - READ FIRST
@@ -59,12 +58,6 @@ On Windows, use WSL (Windows Subsystem for Linux):
 
     4. Create the environment and run as described under USAGE below.
 
-VS Code works with this directly; you do not have to drop to a bare console.
-Install the "WSL" extension (ms-vscode-remote.remote-wsl), then either
-F1 -> "WSL: Connect to WSL", or run 'code .' from a WSL shell inside the
-project folder. The integrated terminal is then a Linux shell and
-"Python: Select Interpreter" lists the conda environments living in WSL.
-
 Note that writing across /mnt/c is slower than inside the Linux file system.
 For the file sizes here (a few tens of MB) that is not a problem.
 
@@ -95,7 +88,6 @@ it would skip xyzToCube.py, and with it the Bohr/Angstrom conversion and the
 reordering from x-fastest to z-fastest. That is the most error-prone step in
 the whole chain. A test case that leaves it out tests the wrong thing.
 
-
 PARAMETER CHOICES
 -----------------
 
@@ -110,11 +102,6 @@ PARAMETER CHOICES
     by eight. At 0.12 Bohr this would take hours instead of minutes, which is
     pointless for a functional test.
 
-    Lower bound: render_esp.py determines the sigma-hole by casting rays and
-    interpolating, not by picking grid points, so it is fairly tolerant of
-    coarse grids. It still warns above 0.30 Bohr spacing, because the
-    interpolated density itself smooths the isosurface and biases the value low
-    by a few percent. 0.25 Bohr stays below that.
 
 --margin 3.5 Angstrom (default)
 
@@ -142,19 +129,6 @@ Block size of the potential evaluation
     chosen so the intermediate stays below 400 MB.
 
 
-SIGN OF THE POTENTIAL
----------------------
-
-V(r) = sum_A Z_A/|R_A - r|  -  integral rho(r')/|r' - r| dr'
-
-PySCF's int1e_grids returns the integrals with a POSITIVE sign, so the
-electronic contribution has to be subtracted. Sanity check: far outside a
-neutral molecule V must go to zero. For HCl at 40 Bohr, v_nuc = +0.4516 and
-v_ele = +0.4512; the difference is +0.0004, while the sum would be +0.9028.
-Get this backwards and the potential is positive everywhere - which is
-immediately obvious, because no image has a single red region left.
-
-
 LIMITATIONS - PLEASE READ
 -------------------------
 
@@ -172,11 +146,6 @@ correctly for this class of molecule", not "how large is the sigma-hole of
 compound X". For the latter, every molecule would have to be optimised and
 computed at the same level.
 
-Incidentally this is the same footnote that is missing from the comparison of
-the three halobenzenes: there, the maximum density value suggests bromine was
-treated all-electron while iodine used an effective core potential. Worth
-asking the supervisor.
-
 
 BUILT-IN TEST CASES
 -------------------
@@ -189,9 +158,12 @@ BUILT-IN TEST CASES
     always identical.
 
     Result: V_S,min = -41.0 kcal/mol on O3, belt = -10.5 kcal/mol at Br,
-    sigma-hole = +15.2 kcal/mol. Note that the sigma-hole is almost twice that
-    of bromobenzene (+7.9) and on par with iodobenzene (+15.5) - the acetyl
-    group withdraws density from the ring and deepens the hole.
+    sigma-hole = +15.2 kcal/mol. That is about 1.5 times the +10.2 of
+    bromobenzene and close to the +16.1 of iodobenzene - the acetyl group
+    withdraws density from the ring and deepens the hole. (Bromobenzene and
+    iodobenzene as reported in ProjectElaboration.pdf, Table 1. Earlier
+    revisions of this file compared against +7.9 and +15.5, which were
+    point-based values; see section 4.3 there for why those are low.)
 
 paracetamol           CC(=O)Nc1ccc(O)cc1
     No halogen. Tests whether the sigma-hole analysis is skipped cleanly and
@@ -223,13 +195,93 @@ USAGE
     cd ../scripts
     python run_all.py --root ../sandbox
 
-Expect roughly 13 seconds for the SCF and about 4 minutes for the grid
-evaluation per molecule at 0.25 Bohr, with a progress display and an estimate
-of the remaining time. Each of td.xyz and tp.xyz is around 60 MB.
 
-The generated td.xyz/tp.xyz are large and excluded by .gitignore. That is
-intentional: they are reproducible from the SMILES at any time with the
-command above.
+================================================================================
+make_reference.py - the committed self-test dataset
+================================================================================
+
+WHAT THIS IS FOR
+----------------
+
+`python run_all.py` without arguments runs on reference/brombenzol/. That is
+the smoke test after a fresh clone: it converts, renders, and writes to
+separate _check names (images_check/, summary_check_<time>_<date>.csv), so the
+committed reference output stays untouched.
+
+The test answers exactly one question: does the installation run, and do the
+documented numbers come out? It does not answer "is this an accurate V_S
+value" - see WHAT IT COSTS below.
+
+The expected result on this dataset:
+    grid 32 x 37 x 24, spacing 0.6000 Bohr, isovalue 0.001
+    V_S,min = -0.01863   V_S,max = +0.03070 a.u.  -> colour scale +/- 0.0350
+    sigma hole (Br12) = +0.01528 a.u. (+9.59 kcal/(mol*e))
+
+If those come out, unit conversion, index reordering, the shell band, the ray
+search and the colour-scale rule all work. If they do not, the problem is the
+installation or a change to the scripts.
+
+HOW THE DATASET IS BUILT
+------------------------
+
+    python tools/make_reference.py sandbox/brombenzol --name brombenzol
+
+It writes a decimated td.xyz / tp.xyz pair in Turbomole pointval format to
+reference/<name>/ and copies the structure file along - without it run_all.py
+will not recognise the folder.
+
+    source        required   molecule folder with td/tp and a structure file
+    --name        folder     name under reference/
+    --outdir      reference/ write somewhere else
+    --stride N    5          keep every N-th grid point per axis
+    --margin      2.5        margin around the isosurface, in Bohr
+    --iso         0.001      the isovalue that must stay fully contained
+
+Two steps, both necessary:
+
+  CROPPING. The full grid is a 30 Bohr box and the molecule with its
+  rho = 0.001 surface fills only the middle of it. The crop is derived from
+  the DENSITY: the bounding box of all points with rho > iso/2, plus --margin.
+  That guarantees the isosurface is fully contained and the images are not cut
+  off at the edge.
+
+  DECIMATING. Then only every --stride-th point per axis.
+
+Together the two bring 1.25 GB down to 1.7 MB per pointval file.
+
+
+WHY POINTVAL AND NOT CUBE
+-------------------------
+
+As the self test is meant to exercise the whole chain, xyzToCube.py included, 
+and unit conversion andindex reordering are the two steps most likely to break. 
+Shipping ready-made cubes would skip exactly those.
+
+
+WHAT IT COSTS
+-------------
+
+0.60 Bohr is five times coarser than the production grids at 0.12 Bohr, and
+that is measurable:
+
+                     reference 0.60 Bohr   production 0.12 Bohr   deviation
+    V_S,min          -0.01863              -0.01882               1.0 %
+    V_S,max          +0.03070              +0.03154               2.7 %
+    sigma hole       +0.01528              +0.01629               6.2 %
+
+The V_S values hold to within one to three per cent; the sigma hole falls
+short by six. That is the smooth, one-sided degradation the stride study in
+section 4.2 of ProjectElaboration.pdf describes: the interpolated density
+smooths the isosurface outwards and the potential is less positive there.
+Broad flat features barely notice, sharp ones suffer.
+
+The reason for the coarse grid is git, not physics. The dataset has to be
+committed so that a fresh clone can test itself, and 1.7 MB per file is
+committable where 200 MB is not.
+
+    DO NOT QUOTE A V_S OR SIGMA-HOLE VALUE FROM THE REFERENCE DATASET. It
+    exists to prove the chain works. Numbers that go into a table come from
+    the full-resolution grids under sandbox/ or results/.
 
 
 ================================================================================
@@ -239,17 +291,17 @@ iso_sweep.py and stride_sweep.py - the parameter study
 WHAT THESE ARE FOR
 ------------------
 
-Two of the workflow's defaults are asserted in the background document rather
+Two of the workflow's defaults are asserted in ProjectElaboration.pdf rather
 than obvious: rho = 0.001 for the isosurface, and stride 1 whenever a number
 goes into a table. Both claims need measurements behind them, and those
 measurements have to be repeatable - by the next reader, and by us after the
 next change to render_esp.py. These two scripts are that measurement.
 
     iso_sweep.py       varies --iso at fixed resolution
-                       -> table in section 4.1 of the background document
+                       -> table in section 4.1 of ProjectElaboration.pdf
 
     stride_sweep.py    varies --stride at fixed isovalue
-                       -> table in section 4.2 of the background document
+                       -> table in section 4.2 of ProjectElaboration.pdf
 
 They answer two different questions. The isovalue moves the physics: over
 0.0005 .. 0.004 a.u. the sigma-hole of bromobenzene grows by a factor of 4.4,
@@ -294,7 +346,8 @@ USAGE
 Each prints its table and writes a CSV next to the cube files
 (iso_sweep_<folder>.csv, stride_sweep_<folder>.csv) carrying more columns than
 the document shows - among them the point-based sigma-hole for comparison with
-the ray-based one, which is the evidence for section 2.2.
+the ray-based one, which is the evidence for section 4.3 of
+ProjectElaboration.pdf.
 
 Other sampling points, and another molecule:
 
@@ -314,6 +367,8 @@ write_cube() does when it is given --stride N. The results are therefore not
 The "cubes" column is computed from the cube format rather than measured,
 because writing the stride-1 file only to read off its size would mean 200 MB
 of disk traffic for one table cell. The data part of that formula is exact; the
-header is estimated to within a few bytes, since the comment lines contain the
-source file name. Checked against sandbox/brombenzol/td.cube: 210 865 313 bytes
-predicted, 210 865 313 measured.
+header is estimated, since the comment lines contain the source file name and
+their length therefore depends on it. Checked against sandbox/brombenzol/
+td.cube: 210 865 313 bytes predicted against 210 865 321 measured, so the
+estimate is eight bytes short on that file - about 0.000004 %, which is well
+inside what the "Cube size" column is meant to convey.
