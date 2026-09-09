@@ -4,12 +4,14 @@
 # A full-resolution cube of a 251^3 grid is ~200 MB and the raw Turbomole
 # pointval output is ~1.25 GB per file. GitHub rejects anything above 100 MB,
 # and these are all regenerable from the raw data with xyzToCube.py.
+# Microsoft word documents
 # ---------------------------------------------------------------------------
 *.cube
 *.cube.part
 td.xyz
 tp.xyz
 README*.bak
+*.docx
 
 # ...except the reference dataset. Those grids are decimated to 0.75 Bohr
 # (~2.3 MB each) and are committed on purpose: they are RAW pointval files, not
