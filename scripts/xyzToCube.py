@@ -698,7 +698,7 @@ PML_RAMPS = {
 
 def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
                        iso=0.001, transparency=0.15, rainbow=False,
-                       stick_size=STICK_SIZE_DEFAULT):
+                       rcs=False, stick_size=STICK_SIZE_DEFAULT):
     if density_cube:
         load_density = f"load {density_cube}, dens"
         isosurface = f"isosurface surf, dens, {iso}"
@@ -713,6 +713,13 @@ def write_pymol_script(path, struct, density_cube, esp_cube, vmin, vmax,
         surface_target = "mol"
 
     cols = PML_RAMPS["rainbow" if rainbow else "redblue"]
+
+    # --rcs turns the colour list around and nothing else. The anchor levels
+    # are computed from vmin/vmax below and stay where they are, so zero keeps
+    # sitting in the middle and the scale keeps its width - only the sign
+    # convention of the colours is inverted. Applies to both ramps.
+    if rcs:
+        cols = list(reversed(cols))
 
     # 1 Hartree/e = 2625.5 kJ/(mol*e)
     text = PML_TEMPLATE.format(
@@ -788,6 +795,10 @@ def main(argv=None):
                         f"to hide the colour behind them.")
     g.add_argument("--rainbow", action="store_true",
                    help="rainbow ramp in esp.pml instead of red-white-blue")
+    g.add_argument("--rcs", action="store_true",
+                   help="reverse colour scale: blue negative, red positive. "
+                        "Applies to whichever ramp is active. The scale keeps "
+                        "its width and its zero, only the colours swap ends")
     args = p.parse_args(argv)
 
     verbose = not args.quiet
@@ -877,6 +888,7 @@ def main(argv=None):
                 esp_cube=os.path.basename(esp_cube),
                 vmin=-rng, vmax=rng, iso=args.pml_iso,
                 transparency=args.transparency, rainbow=args.rainbow,
+                rcs=args.rcs,
                 stick_size=args.stick_size,
             )
             if verbose:

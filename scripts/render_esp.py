@@ -422,13 +422,19 @@ RAMP_HEX = {
 }
 
 
-def ramp_levels(rng, rainbow=False):
+def ramp_levels(rng, rainbow=False, rcs=False):
     """Anchor levels and colours for ``cmd.ramp_new``.
 
     Returns (levels, colors) - equal length, symmetric about 0.
+
+    ``rcs`` reverses the colour list only. The levels are computed from ``rng``
+    and are unaffected, so the scale keeps its width and its zero and only the
+    sign convention of the colours is inverted.
     """
     name = "rainbow" if rainbow else "redblue"
     colors = RAMP_PYMOL[name]
+    if rcs:
+        colors = list(reversed(colors))
     n = len(colors)
     levels = [-rng + 2.0 * rng * i / (n - 1) for i in range(n)]
     return levels, colors
@@ -560,6 +566,10 @@ def ensure_pymol():
 def render_all(args):
     cmd = ensure_pymol()
 
+    # Read once, defensively: the batch driver hands in a namespace it builds
+    # itself, and an older caller may not carry the flag at all.
+    rcs = getattr(args, "rcs", False)
+
     # --- data for the statistics ----------------------------------------
     dens, atoms, origin, voxel = read_cube(args.density)
     esp, _, _, _ = read_cube(args.esp)
@@ -659,7 +669,8 @@ def render_all(args):
         # docs/ESP_Visualization_Background.docx, section 2.1
         # "Which number describes the sigma-hole - Not V_S,max".
     print(f"  Colour scale: +/- {rng:.3f} a.u. ({how})"
-          + ("   [rainbow]" if args.rainbow else ""))
+          + ("   [rainbow]" if args.rainbow else "")
+          + ("   [reversed]" if rcs else ""))
     if args.esp_range == "auto":
         print("  ! To compare several molecules, fix this value:")
         print(f"      --esp-range {rng:.3f}")
@@ -704,7 +715,7 @@ def render_all(args):
     cmd.util.cnc("mol")
 
     cmd.isosurface("surf", "dens", args.iso)
-    levels, ramp_colors = ramp_levels(rng, args.rainbow)
+    levels, ramp_colors = ramp_levels(rng, args.rainbow, rcs)
     cmd.ramp_new("espramp", "esp", levels, ramp_colors)
     cmd.set("surface_color", "espramp", "surf")
     cmd.disable("espramp")                 # keep the bar out of the image
@@ -728,7 +739,7 @@ def render_all(args):
     outdir = args.outdir or "."
     # Its own name suffix, otherwise a rainbow run overwrites the
     # red-white-blue image set of the same molecule.
-    cmap_tag = "_rainbow" if args.rainbow else ""
+    cmap_tag = ("_rainbow" if args.rainbow else "") + ("_rcs" if rcs else "")
     os.makedirs(outdir, exist_ok=True)
     written = []
 
@@ -755,7 +766,7 @@ def render_all(args):
     bar = None
     try:
         bar = colorbar(os.path.join(outdir, f"{args.prefix}{cmap_tag}_colorbar.png"),
-                       rng, dpi=args.dpi, rainbow=args.rainbow)
+                       rng, dpi=args.dpi, rainbow=args.rainbow, rcs=rcs)
         written.append(bar)
         print(f"    -> {bar}")
     except ImportError:
@@ -801,6 +812,8 @@ def render_all(args):
         fh.write(f"Colour scale      : -{rng:.4f} .. +{rng:.4f} a.u. ({how})\n")
         ramp_name = ("rainbow (red-yellow-green-cyan-blue)" if args.rainbow
                      else "red-white-blue")
+        if rcs:
+            ramp_name += "  [reversed: blue negative, red positive]"
         fh.write(f"Colour ramp       : {ramp_name}\n")
         fh.write(f"Transparency      : {args.transparency}\n")
         fh.write(f"Background        : {', '.join(args.backgrounds)}\n")
@@ -820,7 +833,8 @@ def render_all(args):
         "shell_points": npts,
         "esp_range": rng,
         "esp_range_mode": "auto" if args.esp_range == "auto" else "fixed",
-        "colormap": "rainbow" if args.rainbow else "redblue",
+        "colormap": (("rainbow" if args.rainbow else "redblue")
+                     + ("_rcs" if rcs else "")),
         "vmin_atom": loc.get("vmin_atom"),
         "vmax_atom": loc.get("vmax_atom"),
         "halogen": loc.get("halogen"),
@@ -840,8 +854,12 @@ def render_all(args):
     }
 
 
-def colorbar(path, rng, dpi=300, rainbow=False):
-    """Horizontal colour bar as a separate PNG (needs matplotlib)."""
+def colorbar(path, rng, dpi=300, rainbow=False, rcs=False):
+    """Horizontal colour bar as a separate PNG (needs matplotlib).
+
+    ``rcs`` reverses the ramp, so the bar always shows the colours the images
+    were actually drawn with.
+    """
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -849,8 +867,10 @@ def colorbar(path, rng, dpi=300, rainbow=False):
     from matplotlib.colorbar import ColorbarBase
     from matplotlib.colors import Normalize
 
-    cmap = LinearSegmentedColormap.from_list(
-        "esp", RAMP_HEX["rainbow" if rainbow else "redblue"])
+    hexes = RAMP_HEX["rainbow" if rainbow else "redblue"]
+    if rcs:
+        hexes = list(reversed(hexes))
+    cmap = LinearSegmentedColormap.from_list("esp", hexes)
 
     # A generous height plus bbox_inches="tight" when saving: otherwise the
     # axis labels at the bottom are cut off, which shows in the rendered
@@ -917,6 +937,12 @@ def main(argv):
                         "stays negative, blue positive; yellow/green/cyan lie "
                         "in between. Writes an image set of its own, "
                         "<prefix>_rainbow_*.png")
+    p.add_argument("--rcs", action="store_true",
+                   help="reverse colour scale: blue negative, red positive. "
+                        "Applies to whichever ramp is active and to the colour "
+                        "bar. The scale keeps its width and its zero, only the "
+                        "colours swap ends. Writes an image set of its own, "
+                        "<prefix>_rcs_*.png")
     p.add_argument("--no-color", action="store_true",
                    help="plain terminal output without ANSI colours (same effect as "
                         "setting the NO_COLOR environment variable)")

@@ -216,6 +216,7 @@ They do nothing without `--pymol`, which is why `--help` lists them in their own
 | `--transparency` | `0.15` | surface transparency, 0…1. `0` = opaque. |
 | `--stick-size` | `0.10` | stick radius of the skeleton in Å. Thin sticks locate a coloured patch without covering it|
 | `--rainbow` | off | rainbow ramp in the scene instead of red–white–blue; writes `esp_rainbow.pml` so the standard scene survives. |
+| `--rcs` | off | reverse colour scale: blue negative, red positive. Applies to whichever ramp is active; the scale keeps its width and its zero, only the colours swap ends. Writes `esp_rcs.pml`. |
 
 #### Examples
 
@@ -319,6 +320,7 @@ Every molecule therefore lands in the same orientation automatically — that is
 | `--height` | `1600` | image height in px |
 | `--dpi` | `300` | dpi written into the PNG |
 | `--rainbow` | off | rainbow ramp; writes a separate `<prefix>_rainbow_*` set, so the standard set survives. |
+| `--rcs` | off | reverse colour scale: blue negative, red positive. Applies to whichever ramp is active and to the colour bar; writes a separate `<prefix>_rcs_*` set. |
 | `--no-color` | off | plain console output without ANSI colours. |
 
 #### Examples
@@ -339,6 +341,9 @@ python render_esp.py --width 4000 --height 3200 --dpi 600
 
 # second image set with the rainbow ramp, standard set kept
 python render_esp.py --rainbow
+
+# the same, with the colour convention turned around
+python render_esp.py --rcs
 ```
 
 ---
@@ -379,6 +384,7 @@ arguments** it runs on `reference/` instead — the smoke test from §1.3.
 | `--esp-range` | `auto` | `auto` (per molecule) or a fixed value in a.u. for all of them |
 | `--two-pass` | off | render with `auto` first, then re-render everything with the largest range found — the recommended mode for a figure set |
 | `--rainbow` | off | rainbow ramp; writes a separate `<molecule>_rainbow_*` set and `esp_rainbow.pml` |
+| `--rcs` | off | reverse colour scale: blue negative, red positive; writes a separate `<molecule>_rcs_*` set and `esp_rcs.pml` |
 | `--iso` | `0.001` | density isovalue, passed through to `render_esp.py` |
 | `--transparency` | `0.15` | passed through |
 | `--stick-size` | `0.10` | passed through to the images and to the `esp.pml` written beside them |
@@ -387,7 +393,7 @@ arguments** it runs on `reference/` instead — the smoke test from §1.3.
 | `--height` | `1600` | passed through |
 | `--dpi` | `300` | passed through |
 | `--images-dir` | `images` (`images_check` for the built-in reference run) | name of the output folder inside each molecule folder |
-| `--summary` | `<root>/summary_HH-MM_DD-MM-YYYY.csv` | path of the CSV summary. The time stamp keeps a later run from overwriting an earlier one, two runs on the same day included; `--rainbow` adds `_rainbow`, the smoke test `_check`. |
+| `--summary` | `<root>/summary_HH-MM_DD-MM-YYYY.csv` | path of the CSV summary. The time stamp keeps a later run from overwriting an earlier one, two runs on the same day included; `--rainbow` adds `_rainbow`, `--rcs` adds `_rcs`, the smoke test `_check`. |
 | `--no-color` | off | plain console output without ANSI colours |
 
 ### Examples
@@ -440,11 +446,13 @@ Per molecule folder:
 
 With `--rainbow` the same names appear with `_rainbow` inserted
 (`<prefix>_rainbow_pi.png`, `esp_rainbow.pml`, …), so a rainbow run never
-overwrites the standard set.
+overwrites the standard set. `--rcs` inserts `_rcs` in the same way and the two
+combine: `--rainbow --rcs` writes `<prefix>_rainbow_rcs_pi.png` and
+`esp_rainbow_rcs.pml`.
 
 Per run, `run_all.py` writes `summary_<HH-MM>_<DD-MM-YYYY>.csv`. A `--rainbow` run
-writes `summary_rainbow_<time>_<date>.csv` instead, so the two sets never overwrite
-each other:
+writes `summary_rainbow_<time>_<date>.csv` instead, and `--rcs` adds `_rcs`, so the
+sets never overwrite each other:
 
 | Column | Content |
 |---|---|
@@ -460,7 +468,7 @@ each other:
 | `sigma_holes_all` | every one of them as `label:value` pairs, e.g. `Br1:0.00862;Cl4:-0.00398` |
 | `belt_min_au` | the halogen belt minimum |
 | `sigma_method` | which method produced the σ-hole value (ray-based or point-based) |
-| `colormap` | `redblue` or `rainbow` |
+| `colormap` | `redblue` or `rainbow`, with `_rcs` appended when the scale was reversed |
 
 Whatever colour range you choose, **state it in the figure caption** and ship
 `*_colorbar.png` with the figures. An ESP figure without its scale is

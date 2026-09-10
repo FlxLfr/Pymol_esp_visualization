@@ -199,7 +199,7 @@ def convert(entry, stride, struct_unit, force=False):
 
 
 def write_scene(entry, cubes, esp_range, iso, transparency,
-                filename="esp.pml", rainbow=False,
+                filename="esp.pml", rainbow=False, rcs=False,
                 stick_size=xyzToCube.STICK_SIZE_DEFAULT):
     """Writes a PyMOL script next to the cube files.
 
@@ -217,7 +217,7 @@ def write_scene(entry, cubes, esp_range, iso, transparency,
         density_cube=os.path.basename(cubes["td"]),
         esp_cube=os.path.basename(cubes["tp"]),
         vmin=-esp_range, vmax=esp_range,
-        iso=iso, transparency=transparency, rainbow=rainbow,
+        iso=iso, transparency=transparency, rainbow=rainbow, rcs=rcs,
         stick_size=stick_size,
     )
     return path
@@ -225,7 +225,7 @@ def write_scene(entry, cubes, esp_range, iso, transparency,
 
 def render(entry, cubes, esp_range, iso, transparency, backgrounds,
            width, height, dpi, prefix=None, images_dir="images",
-           rainbow=False, struct_unit="angstrom",
+           rainbow=False, rcs=False, struct_unit="angstrom",
            stick_size=xyzToCube.STICK_SIZE_DEFAULT):
     folder = entry["dir"]
     args = types.SimpleNamespace(
@@ -243,13 +243,14 @@ def render(entry, cubes, esp_range, iso, transparency, backgrounds,
         height=height,
         dpi=dpi,
         rainbow=rainbow,
+        rcs=rcs,
         stick_size=stick_size,
     )
     return render_esp.render_all(args)
 
 
-def summary_name(is_reference, rainbow, when=None):
-    """summary[_check][_rainbow]_HH-MM_DD-MM-YYYY.csv
+def summary_name(is_reference, rainbow, rcs=False, when=None):
+    """summary[_check][_rainbow][_rcs]_HH-MM_DD-MM-YYYY.csv
 
     Time-stamped on purpose, so that a later run does not silently overwrite
     the summary of an earlier one. The date alone was not enough: two runs on
@@ -271,6 +272,8 @@ def summary_name(is_reference, rainbow, when=None):
         parts.append("check")
     if rainbow:
         parts.append("rainbow")
+    if rcs:
+        parts.append("rcs")
     parts.append(stamp)
     return "_".join(parts) + ".csv"
 
@@ -364,6 +367,11 @@ def main(argv=None):
                    help="rainbow colour ramp instead of red-white-blue; "
                         "writes a separate <molecule>_rainbow_* image set "
                         "and esp_rainbow.pml, so the standard set is kept")
+    p.add_argument("--rcs", action="store_true",
+                   help="reverse colour scale: blue negative, red positive. "
+                        "Applies to whichever ramp is active and to the colour "
+                        "bar; writes a separate <molecule>_rcs_* image set and "
+                        "esp_rcs.pml, so the standard set is kept")
     p.add_argument("--two-pass", action="store_true",
                    help="auto pass first, then re-render everything with the "
                         "largest range found")
@@ -388,7 +396,8 @@ def main(argv=None):
     p.add_argument("--summary", default=None,
                    help="path of the CSV summary (default "
                         "<root>/summary_HH-MM_DD-MM-YYYY.csv, with _check "
-                        "on the self test and _rainbow with --rainbow)")
+                        "on the self test, _rainbow with --rainbow and _rcs "
+                        "with --rcs)")
     args = p.parse_args(argv)
 
     if args.no_color:
@@ -399,7 +408,8 @@ def main(argv=None):
     # either. Its own name, otherwise a rainbow run overwrites the scene of the
     # red-white-blue run - the images are kept apart for the same reason.
     _stem = "esp_check" if is_reference else "esp"
-    pml_name = f"{_stem}{'_rainbow' if args.rainbow else ''}.pml"
+    pml_name = (_stem + ("_rainbow" if args.rainbow else "")
+                + ("_rcs" if args.rcs else "") + ".pml")
     if args.images_dir is None:
         # The self test must not overwrite the committed reference images.
         args.images_dir = "images_check" if is_reference else "images"
@@ -447,7 +457,7 @@ def main(argv=None):
             res = render(e, cubes, args.esp_range, args.iso, args.transparency,
                          args.backgrounds, args.width, args.height, args.dpi,
                          images_dir=args.images_dir,
-                         rainbow=args.rainbow,
+                         rainbow=args.rainbow, rcs=args.rcs,
                          struct_unit=args.struct_unit,
                          stick_size=args.stick_size)
         except xyzToCube.StructureGridMismatch as err:
@@ -457,7 +467,8 @@ def main(argv=None):
             continue
         pml = write_scene(e, cubes, res["esp_range"], args.iso,
                           args.transparency, filename=pml_name,
-                          rainbow=args.rainbow, stick_size=args.stick_size)
+                          rainbow=args.rainbow, rcs=args.rcs,
+                          stick_size=args.stick_size)
         print(f"    -> {pml}")
         rows.append(res)
         ok_entries.append(e)
@@ -478,19 +489,19 @@ def main(argv=None):
             res = render(e, cubes, common, args.iso, args.transparency,
                          args.backgrounds, args.width, args.height, args.dpi,
                          images_dir=args.images_dir,
-                         rainbow=args.rainbow,
+                         rainbow=args.rainbow, rcs=args.rcs,
                          struct_unit=args.struct_unit,
                          stick_size=args.stick_size)
             pml = write_scene(e, cubes, common, args.iso, args.transparency,
                               filename=pml_name, rainbow=args.rainbow,
-                              stick_size=args.stick_size)
+                              rcs=args.rcs, stick_size=args.stick_size)
             print(f"    -> {pml}")
             rows.append(res)
     elif args.two_pass and len(rows) <= 1:
         print("\n(--two-pass skipped: a single molecule needs no common scale)")
 
     summary = args.summary or os.path.join(
-        args.root, summary_name(is_reference, args.rainbow))
+        args.root, summary_name(is_reference, args.rainbow, args.rcs))
     write_summary(summary, rows, common_range=common)
 
     print("\n" + "-" * 70)
