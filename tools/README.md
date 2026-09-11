@@ -186,10 +186,11 @@ belt (Cl11) = -0.01095 a.u. (-6.87 kcal/(mol*e))
 
 Used to confirm the fixes, implemented by the findings of Triazolam, also 2 halogens are available and the sigma view showed the halogen with the bigger potential value 
 
-Result: V_S,min = -42.42 kcal/mol  auf O19, V_S,max = +43.98 kcal/mol on H39
+Result: V_S,min = -42.42 kcal/mol  on O19, V_S,max = +43.98 kcal/mol on H39
 σ-hole (Cl13) = +0.00551 a.u. (+3.46 kcal/(mol*e))  [interpolated]
 belt (Cl13) = -0.01925 a.u. (-12.08 kcal/(mol*e))
 σ-hole (F26) = -0.02631 a.u. (-16.51 kcal/(mol*e))  [interpolated]
+F26 comes out negative, which is the expected result: fluorine is too electronegative to develop a σ-hole, so the cone search reports a minimum where the other halogens report a maximum.
 belt (F26) = -0.02142 a.u. (-13.44 kcal/(mol*e))
 
 ### Usage

@@ -313,7 +313,7 @@ def main(argv=None):
     p.add_argument("--smiles", help="SMILES of a single molecule")
     p.add_argument("--name", help="folder and file name for it")
     p.add_argument("--preset", action="store_true",
-                   help="produce the two built-in test cases")
+                   help="produce the four built-in test cases")
     p.add_argument("--outdir", default="../sandbox",
                    help="root directory for the molecule folders")
     p.add_argument("--spacing", type=float, default=0.25,
