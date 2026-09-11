@@ -88,6 +88,23 @@ The result is a folder that looks exactly like a real dataset and can be dropped
 straight into `sandbox/`.
 
 
+### Options
+
+| Option | Default | Effect |
+|---|---|---|
+| `--smiles` | — | SMILES of a single molecule; use together with `--name` |
+| `--name` | — | folder and file name for that molecule |
+| `--preset` | off | build the four built-in test cases instead: 4-bromoacetophenone, paracetamol, haloperidol and triazolam |
+| `--outdir` | `../sandbox` | root directory the molecule folders are written into |
+| `--spacing` | `0.25` | grid spacing in Bohr |
+| `--margin` | `3.5` | margin around the molecule, in Ångström |
+| `--basis` | `def2-svp` | basis set handed to PySCF |
+| `--method` | `hf` | SCF method, `hf` or `b3lyp` |
+
+Either `--preset` or `--smiles` together with `--name` has to be given; without
+one of the two the script stops and says so. Why the defaults are what they are
+is the next section.
+
 ### Parameter choices
 
 **`--spacing 0.25` Bohr (default).** The real Turbomole data uses 0.12 Bohr; the
@@ -114,7 +131,7 @@ available via `--method` but takes longer and changes nothing about the purpose
 of the test.
 
 
-### Limitations — please read
+### Limitations
 
 1. **The geometry comes from a force field**, not from a quantum chemical
    optimisation. MMFF94 gives usable structures, but bond lengths and angles
