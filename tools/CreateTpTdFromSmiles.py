@@ -57,14 +57,10 @@ from constants import BOHR_PER_ANGSTROM  # noqa: E402
 # Built-in test cases. Chosen deliberately to cover the gaps that three nearly
 # identical halobenzenes leave open.
 PRESETS = [
-    # Halogen AND carbonyl: V_S,min has to move to the carbonyl oxygen while
-    # the belt value stays on the bromine. Only here do the two numbers diverge
-    # at all.
     ("4-bromacetophenon", "CC(=O)c1ccc(Br)cc1"),
-    # No halogen: does the sigma-hole analysis run into nothing cleanly, and
-    # does the orientation fall back sensibly onto the principal axes without a
-    # C-X axis?
     ("paracetamol", "CC(=O)Nc1ccc(O)cc1"),
+    ("haloperidol", "O=C(CCCN1CCC(O)(c2ccc(Cl)cc2)CC1)c1ccc(F)cc1"),
+    ("triazolam", "CC1=NN=C2N1C3=C(C=C(C=C3)Cl)C(=NC2)C4=CC=CC=C4Cl")
 ]
 
 
