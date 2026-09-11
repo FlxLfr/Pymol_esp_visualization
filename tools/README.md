@@ -182,14 +182,14 @@ belt (Cl21) = -0.01836 a.u. (-11.52 kcal/(mol*e))
 belt (Cl11) = -0.01095 a.u. (-6.87 kcal/(mol*e))
 
 
-**Haloperidol (Halcion)**: `O=C(CCCN1CCC(O)(c2ccc(Cl)cc2)CC1)c1ccc(F)cc1`
+**Haloperidol**: `O=C(CCCN1CCC(O)(c2ccc(Cl)cc2)CC1)c1ccc(F)cc1`
 
 Used to confirm the fixes, implemented by the findings of Triazolam, also 2 halogens are available and the sigma view showed the halogen with the bigger potential value 
 
-Result: V_S,min = -42.42 kcal/mol  auf O19, V_S,max = +43.98 kcal/mol auf H39
+Result: V_S,min = -42.42 kcal/mol  auf O19, V_S,max = +43.98 kcal/mol on H39
 σ-hole (Cl13) = +0.00551 a.u. (+3.46 kcal/(mol*e))  [interpolated]
 belt (Cl13) = -0.01925 a.u. (-12.08 kcal/(mol*e))
-sigma-Loch (F26) = -0.02631 a.u. (-16.51 kcal/(mol*e))  [interpolated]
+σ-hole (F26) = -0.02631 a.u. (-16.51 kcal/(mol*e))  [interpolated]
 belt (F26) = -0.02142 a.u. (-13.44 kcal/(mol*e))
 
 ### Usage
