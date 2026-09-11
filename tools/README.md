@@ -92,8 +92,8 @@ straight into `sandbox/`.
 
 | Option | Default | Effect |
 |---|---|---|
-| `--smiles` | — | SMILES of a single molecule; use together with `--name` |
-| `--name` | — | folder and file name for that molecule |
+| `--smiles` | - | SMILES of a single molecule; use together with `--name` |
+| `--name` | - | folder and file name for that molecule |
 | `--preset` | off | build the four built-in test cases instead: 4-bromoacetophenone, paracetamol, haloperidol and triazolam |
 | `--outdir` | `../sandbox` | root directory the molecule folders are written into |
 | `--spacing` | `0.25` | grid spacing in Bohr |
@@ -211,12 +211,12 @@ python CreateTpTdFromSmiles.py --smiles "ClC" --name chloromethane \
 
 # then continue as usual
 cd ../scripts
-python run_all.py --root ../sandbox
+python run_all.py --root ../sandbox --only chloromethane
 ```
 
 ---
 
-## 2  `make_reference.py` — the committed self-test dataset
+## 2  `make_reference.py`
 
 ### What this is for
 
@@ -227,12 +227,10 @@ committed reference output stays untouched.
 
 The test answers exactly one question: **does the installation run, and do the
 documented numbers come out?** It does not answer "is this an accurate V_S value"
-— see [What it costs](#what-it-costs) below.
 
 The expected result on this dataset:
 
 ```
-grid 32 x 37 x 24, spacing 0.6000 Bohr, isovalue 0.001
 V_S,min = -0.01863   V_S,max = +0.03070 a.u.  -> colour scale +/- 0.0350
 sigma hole (Br12) = +0.01528 a.u. (+9.59 kcal/(mol*e))
 ```
@@ -274,7 +272,7 @@ Together the two bring 1.25 GB down to 1.7 MB per `pointval` file.
 
 ### Why `pointval` and not cube
 
-The self test is meant to exercise the whole chain, `xyzToCube.py` included — and
+The smoke test is meant to exercise the whole chain, including `xyzToCube.py`,
 unit conversion and index reordering are the two steps most likely to break.
 Shipping ready-made cubes would skip exactly those.
 
@@ -305,15 +303,14 @@ committable where 200 MB is not.
 
 ---
 
-## 3  `iso_sweep.py` and `stride_sweep.py` — the parameter study
+## 3  `iso_sweep.py` and `stride_sweep.py`
 
 ### What these are for
 
 Two of the workflow's defaults are asserted in ProjectElaboration.pdf rather than
-obvious: ρ = 0.001 for the isosurface, and stride 1 whenever a number goes into a
-table. Both claims need measurements behind them, and those measurements have to
-be repeatable — by the next reader, and by us after the next change to
-`render_esp.py`. These two scripts are that measurement.
+obvious: ρ = 0.001 for the isosurface and stride 1 whenever a number goes into a
+table. Both claims need measurements behind them and those measurements have to
+be repeatable. These two scripts are that measurement.
 
 | Script | Varies | Feeds |
 |---|---|---|
@@ -325,8 +322,7 @@ They answer two different questions. The isovalue moves the physics: over
 σ-hole value quoted without its isovalue means nothing. The stride only costs
 accuracy: from 0.12 to 0.96 Bohr the same value falls by 17 %, smoothly and
 always low, while the files shrink by a factor of 480. One parameter has to be
-fixed by convention, the other can be traded against disk space — and it is worth
-being able to show that, not just say it.
+fixed by convention, the other can be traded against disk space.
 
 Both scripts import `esp_statistics()`, `shell_points()`, `local_extrema()` and
 `sigma_hole_interpolated()` from `../scripts` and call nothing of their own. That
@@ -336,7 +332,7 @@ these tables change with it.
 
 ### What they need
 
-The normal `esp` environment from `environment.yml` — numpy is enough. **Not** the
+The normal `esp` environment from `environment.yml` is enough. **Not** the
 `esp-testdata` environment above; there is no PySCF and no RDKit involved, so
 these two run natively on Windows.
 
@@ -360,10 +356,10 @@ python stride_sweep.py --folder ../sandbox/brombenzol
 
 Each prints its table and writes a CSV next to the cube files
 (`iso_sweep_<folder>.csv`, `stride_sweep_<folder>.csv`) carrying more columns than
-the document shows — among them the point-based σ-hole for comparison with the
+the document shows. Among them the point-based σ-hole for comparison with the
 ray-based one, which is the evidence for section 4.3 of ProjectElaboration.pdf.
 
-Other sampling points, and another molecule:
+Other sampling points and another molecule:
 
 ```bash
 python iso_sweep.py    --isos 0.001 0.002 --folder ../sandbox/iodbenzol
@@ -374,15 +370,7 @@ python stride_sweep.py --strides 1 2 4 --folder ../sandbox/chlorbenzol
 
 `stride_sweep.py` does not reconvert the `pointval` files for every stride. It
 decimates the full-resolution cube in memory with `data[::N, ::N, ::N]` and scales
-the voxel vectors by N — which is exactly, line for line, what `write_cube()` does
+the voxel vectors by N, which is exactly, line for line, what `write_cube()` does
 when it is given `--stride N`. The results are therefore not "comparable to" a
 real stride-N run; they are the same numbers.
 
-The "cubes" column is computed from the cube format rather than measured, because
-writing the stride-1 file only to read off its size would mean 200 MB of disk
-traffic for one table cell. The data part of that formula is exact; the header is
-estimated, since the comment lines contain the source file name and their length
-therefore depends on it. Checked against `sandbox/brombenzol/td.cube`:
-210 865 313 bytes predicted against 210 865 321 measured, so the estimate is
-eight bytes short on that file — about 0.000004 %, which is well inside what the
-"Cube size" column is meant to convey.
