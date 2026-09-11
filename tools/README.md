@@ -1,4 +1,4 @@
-# `tools/` — test data, the reference dataset and the parameter study
+# `tools/` creating additional test data, creating the reference dataset and conducting the parameter study
 
 Four scripts that sit **outside** the rendering workflow. None of them is called
 by `run_all.py`, and nothing in `scripts/` imports them.
@@ -12,7 +12,7 @@ by `run_all.py`, and nothing in `scripts/` imports them.
 
 ---
 
-## 1  `CreateTpTdFromSmiles.py` — test data for the ESP workflow
+## 1  `CreateTpTdFromSmiles.py`, creating edge cases data for the ESP workflow
 
 ### What this is for
 
@@ -22,12 +22,12 @@ show up.
 
 There is no public database of Turbomole `pointval` files. They are the
 intermediate output of one particular calculation in one particular group;
-nobody archives them. So we generate our own with the help of this script.
+nobody archives them. So the need to generate our own with the help of this script arised.
 
-### Platform requirement — read first
+### Platform requirement!!
 
 PySCF is **not** available for Windows. conda-forge builds it for linux-64,
-linux-aarch64, linux-ppc64le, macOS-64 and macOS-arm64 — there is no win-64
+linux-aarch64, linux-ppc64le, macOS-64 and macOS-arm64. There is no win-64
 package, and there are no Windows wheels on PyPI either. On Windows,
 `conda env create` will fail with:
 
@@ -37,8 +37,7 @@ current channels:
   - pyscf
 ```
 
-This affects **only this tool**. The actual workflow — `xyzToCube.py`,
-`render_esp.py`, `run_all.py` — runs natively on Windows, macOS and Linux.
+This affects **only this tool**. The actual esp visualization workflow runs natively on Windows, macOS and Linux.
 
 On Windows, use WSL (Windows Subsystem for Linux):
 
@@ -65,8 +64,6 @@ On Windows, use WSL (Windows Subsystem for Linux):
    cd /mnt/c/Users/<you>/Desktop/.../Pymol_esp_visualization
    ```
 
-   No copying needed — it is the same folder.
-
 4. Create the environment and run as described under [Usage](#usage) below.
 
 Note that writing across `/mnt/c` is slower than inside the Linux file system.
@@ -90,18 +87,12 @@ rho(r) ---> td.xyz        V(r) ---> tp.xyz     (Turbomole pointval format)
 The result is a folder that looks exactly like a real dataset and can be dropped
 straight into `sandbox/`.
 
-### Why `pointval` and not cube directly
-
-PySCF could write cube files directly. That is precisely what we do not want: it
-would skip `xyzToCube.py`, and with it the Bohr/Ångström conversion and the
-reordering from x-fastest to z-fastest. That is the most error-prone step in the
-whole chain. A test case that leaves it out tests the wrong thing.
 
 ### Parameter choices
 
 **`--spacing 0.25` Bohr (default).** The real Turbomole data uses 0.12 Bohr; the
 cubes derived from it with `--stride 2` use 0.24 Bohr. So 0.25 is essentially the
-same resolution — comparable, without blowing up the run time.
+same resolution, comparable, good enough for testing, without blowing up the run time.
 
 Why not finer: evaluating the potential costs one integral over all basis
 functions per grid point. Halving the spacing multiplies the point count by
@@ -114,7 +105,7 @@ radius, i.e. a good 2 Å beyond the nuclei. 3.5 leaves headroom so the surface i
 not clipped — clipped isosurfaces show up in the images as straight edges.
 
 Bigger is not better: the margin applies in all three directions, so every extra
-Ångström costs disproportionately more compute.
+Ångström costs disproportionately more computing time.
 
 **`--basis def2-svp`, `--method hf` (defaults).** HF/def2-SVP is the classic level
 for ESP evaluation and it is fast. def2-SVP treats bromine all-electron;
@@ -122,12 +113,6 @@ effective core potentials start at rubidium, so iodine uses one. B3LYP is
 available via `--method` but takes longer and changes nothing about the purpose
 of the test.
 
-**Block size of the potential evaluation.** No longer guessed, but derived from
-the memory footprint. `int1e_grids` returns an array of shape
-(points, nao, nao); with 193 basis functions that is 0.28 MB per single grid
-point. A fixed block of 20 000 points tried to allocate 6 GB and was killed by
-the operating system. The block is now chosen so the intermediate stays below
-400 MB.
 
 ### Limitations — please read
 
@@ -135,39 +120,60 @@ the operating system. The block is now chosen so the intermediate stays below
    optimisation. MMFF94 gives usable structures, but bond lengths and angles
    deviate from an optimised geometry, which shifts the ESP values.
 2. **The level of theory is not the one used for the provided data.** Method,
-   basis set, and whether effective core potentials were used all affect V_S,min
+   basis set and whether effective core potentials were used all affect V_S,min
    and V_S,max.
 
 > **These numbers do not belong in a table next to values from the provided
 > Turbomole data.** They answer the question "does the pipeline run correctly for
-> this class of molecule", not "how large is the σ-hole of compound X". For the
+> this other class of molecule", not "how large is the σ-hole of compound X". For the
 > latter, every molecule would have to be optimised and computed at the same
 > level.
 
 ### Built-in test cases
 
-**4-bromoacetophenone** — `CC(=O)c1ccc(Br)cc1`
+**4-bromoacetophenone**: `CC(=O)c1ccc(Br)cc1`
 
 Halogen **and** carbonyl. The carbonyl oxygen is considerably more negative than
 the bromine belt, so V_S,min has to move onto the oxygen while the belt value is
 still measured at the bromine. This is the first case where the two lines show
-different numbers — for the halobenzenes they were always identical.
+different numbers: for the halobenzenes they were always identical.
 
 Result: V_S,min = −41.0 kcal/mol on O3, belt = −10.5 kcal/mol at Br, σ-hole =
 +15.2 kcal/mol. That is about 1.5 times the +10.2 of bromobenzene and close to
-the +16.1 of iodobenzene — the acetyl group withdraws density from the ring and
-deepens the hole. (Bromobenzene and iodobenzene as reported in
-ProjectElaboration.pdf, Table 1. Earlier revisions of this file compared against
-+7.9 and +15.5, which were point-based values; see section 4.3 there for why
-those are low.)
+the +16.1 of iodobenzene. The acetyl group withdraws density from the ring and
+deepens the hole.
 
-**Paracetamol** — `CC(=O)Nc1ccc(O)cc1`
+**Paracetamol**: `CC(=O)Nc1ccc(O)cc1`
 
 No halogen. Tests whether the σ-hole analysis is skipped cleanly and whether the
 orientation falls back to the principal axes instead of crashing.
 
 Result: V_S,min = −45.9 kcal/mol on O3, V_S,max = +56.1 kcal/mol on H18, no
 σ-hole block, dash in the summary table, orientation sensible.
+
+**Triazolam (Halcion)**: `CC1=NN=C2N1C3=C(C=C(C=C3)Cl)C(=NC2)C4=CC=CC=C4Cl`
+
+2 halogens and super complex 3D-molecule structure, here two errors occurred with the implementation, 
+the first halogen was taken for the axial view picture and not the one with the biggest sigma hole and the
+rays to calculate the sigma hole, left the halogen and measured the surface of the neighbouring methyl group (see ProjectElaboration.pdf §5.2).
+Both defects have been subsequently fixed and Halcion was added to the results, as it was crucial for the development.
+
+Result: V_S,min = -52.89 kcal/mol on N4, V_S,max = +34.09 kcal/mol on H27
+σ-hole (Cl21) = +0.01709 a.u. (+10.73 kcal/(mol*e))  [interpolated]
+belt (Cl21) = -0.01836 a.u. (-11.52 kcal/(mol*e))
+σ-hole (Cl11) = +0.01440 a.u. (+9.03 kcal/(mol*e))  [interpolated]
+belt (Cl11) = -0.01095 a.u. (-6.87 kcal/(mol*e))
+
+
+**Haloperidol (Halcion)**: `O=C(CCCN1CCC(O)(c2ccc(Cl)cc2)CC1)c1ccc(F)cc1`
+
+Used to confirm the fixes, implemented by the findings of Triazolam, also 2 halogens are available and the sigma view showed the halogen with the bigger potential value 
+
+Result: V_S,min = -42.42 kcal/mol  auf O19, V_S,max = +43.98 kcal/mol auf H39
+σ-hole (Cl13) = +0.00551 a.u. (+3.46 kcal/(mol*e))  [interpolated]
+belt (Cl13) = -0.01925 a.u. (-12.08 kcal/(mol*e))
+sigma-Loch (F26) = -0.02631 a.u. (-16.51 kcal/(mol*e))  [interpolated]
+belt (F26) = -0.02142 a.u. (-13.44 kcal/(mol*e))
 
 ### Usage
 
